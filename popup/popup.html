@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Best AdBlock</title>
+  </head>
+  <body>
+    <header>
+      <h1>Best AdBlock</h1>
+      <span id="statusDot" class="dot"></span>
+    </header>
+
+    <section class="stat">
+      <div class="count" id="blockedCount">0</div>
+      <div class="label">blokkert på denne siden</div>
+    </section>
+
+    <section class="controls">
+      <label class="switch">
+        <span>Blokkering på</span>
+        <input type="checkbox" id="enabledToggle" />
+        <span class="slider"></span>
+      </label>
+
+      <button id="whitelistBtn" class="wl-btn">Tillat annonser på denne siden</button>
+      <button id="pickerBtn" class="wl-btn">Blokker et element</button>
+      <button id="unlockBtn" class="wl-btn">Lås opp artikkel</button>
+      <label class="unlock-always">
+        <input type="checkbox" id="unlockAlways" />
+        <span>Alltid lås opp denne siden</span>
+      </label>
+      <div class="host" id="hostLabel"></div>
+    </section>
+
+    <footer>
+      <a href="#" id="optionsLink">Innstillinger</a>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

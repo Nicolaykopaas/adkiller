@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="options.css" />
+    <title>Best AdBlock – Innstillinger</title>
+  </head>
+  <body>
+    <main>
+      <h1>Best AdBlock</h1>
+      <p class="sub">Innstillinger</p>
+
+      <section class="card">
+        <h2>Filterkategorier</h2>
+        <label class="row">
+          <div>
+            <strong>Annonser</strong>
+            <span>AdGuard Base (~EasyList) – blokkerer reklame</span>
+          </div>
+          <input type="checkbox" data-ruleset="ads" />
+        </label>
+        <label class="row">
+          <div>
+            <strong>Sporing / personvern</strong>
+            <span>AdGuard Tracking Protection (~EasyPrivacy)</span>
+          </div>
+          <input type="checkbox" data-ruleset="privacy" />
+        </label>
+        <label class="row">
+          <div>
+            <strong>Popups & irritasjoner</strong>
+            <span>Popups, cookie-varsler og andre plagsomheter</span>
+          </div>
+          <input type="checkbox" data-ruleset="annoyances" />
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Lås opp artikkel (fjern lesevegg)</h2>
+        <p class="hint">
+          Fjerner myke lesevegger der artikkelen alt er lastet inn (overlegg, scroll-lås,
+          blur). Harde betalingsmurer kan ikke fjernes.
+        </p>
+        <label class="row">
+          <div>
+            <strong>Prøv automatisk på alle sider</strong>
+          </div>
+          <input type="checkbox" id="readerAuto" />
+        </label>
+        <ul id="unlockSites" class="whitelist"></ul>
+        <p id="emptyUnlock" class="empty">Ingen sider satt til automatisk opplåsing.</p>
+      </section>
+
+      <section class="card">
+        <h2>Tillatte sider (whitelist)</h2>
+        <ul id="whitelist" class="whitelist"></ul>
+        <p id="emptyWl" class="empty">Ingen sider er tillatt ennå.</p>
+      </section>
+
+      <section class="card">
+        <h2>Oppdater filterlister</h2>
+        <p class="hint">Kosmetiske filterlister kan oppdateres direkte her.</p>
+        <button id="updateCosmeticBtn" class="wl-btn">Oppdater nå</button>
+        <p id="cosmeticStatus" class="hint"></p>
+        <p class="hint">
+          Nettverkslistene krever fortsatt at du kjører <code>npm run build:filters</code>
+          i prosjektmappen og laster utvidelsen på nytt fra <code>chrome://extensions</code>.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Egne blokkerte elementer</h2>
+        <div id="userRules"></div>
+        <p id="emptyUserRules" class="empty">Du har ikke blokkert noen egne elementer ennå.</p>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

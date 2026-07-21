@@ -1,0 +1,96 @@
+{
+  "manifest_version": 3,
+  "name": "Best AdBlock",
+  "version": "1.0.0",
+  "description": "Blokkerer reklame, popups og pop-unders på alle nettsider via filterlister (EasyList m.fl.).",
+  "minimum_chrome_version": "120",
+
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
+    "storage",
+    "scripting",
+    "tabs",
+    "webNavigation",
+    "alarms"
+  ],
+  "host_permissions": ["<all_urls>"],
+
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Best AdBlock",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "48": "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    }
+  },
+
+  "icons": {
+    "16": "assets/icon-16.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  },
+
+  "options_page": "options/options.html",
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/popup-blocker.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/state-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/cosmetic.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/reader-unlock.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["rules/generic-hide.css", "rules/specific-hide.json"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ads",
+        "enabled": true,
+        "path": "rules/ruleset_ads.json"
+      },
+      {
+        "id": "privacy",
+        "enabled": true,
+        "path": "rules/ruleset_privacy.json"
+      },
+      {
+        "id": "annoyances",
+        "enabled": true,
+        "path": "rules/ruleset_annoyances.json"
+      }
+    ]
+  }
+}

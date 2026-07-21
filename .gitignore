@@ -1,0 +1,25 @@
+node_modules/
+package-lock.json
+
+# Genererte filer fra build:filters (bygg på nytt med `npm run build`)
+rules/
+
+# Generert hot-reload-stempel
+version.json
+
+# Genererte ikoner
+assets/icon-16.png
+assets/icon-48.png
+assets/icon-128.png
+
+# Chrome-genererte artefakter når utvidelsen lastes utpakket
+_metadata/
+
+# Lokal Claude Code-config
+.claude/settings.local.json
+
+# Tom leftover-fil
+nyfil.py
+
+.DS_Store
+*.log
