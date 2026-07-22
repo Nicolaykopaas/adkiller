@@ -185,6 +185,21 @@ if (/chrome\.tabs\.reload/.test(swSrc)) {
   fail('service-worker.js kaller chrome.tabs.reload — hot-reload må aldri laste brukerens faner');
 } else ok('hot-reload laster aldri brukerens faner');
 
+// Feilrapporten må ALDRI endre blokkeringen — ellers maskerer den tilstanden vi måler.
+{
+  const start = swSrc.indexOf("case 'reportProblem'");
+  if (start === -1) {
+    fail('finner ikke reportProblem-handleren i service-worker.js');
+  } else {
+    const rest = swSrc.slice(start + 10);
+    const end = rest.indexOf("case '");
+    const block = end === -1 ? rest : rest.slice(0, end);
+    if (/storage\.local\.set\(\s*\{[^}]*whitelist/s.test(block) || /syncEverything\(\)/.test(block)) {
+      fail('reportProblem endrer whitelist/blokkering — rapporten skal kun observere');
+    } else ok('feilrapporten endrer ikke blokkeringen');
+  }
+}
+
 const popupBlockerSrc = fs.readFileSync(p('content', 'popup-blocker.js'), 'utf8');
 // window.open må være en accessor (ikke writable:false) for å unngå TypeError
 if (/writable:\s*false/.test(popupBlockerSrc)) {

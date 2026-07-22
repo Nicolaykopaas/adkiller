@@ -386,12 +386,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           return;
         }
 
-        // Whitelist siden så den virker med en gang.
+        // Rapporten skal ALDRI endre blokkeringen. Whitelisting her maskerte nettopp
+        // den tilstanden vi prøver å måle, og gjorde fikser umulige å etterprøve.
         const { whitelist, enabled, readerAuto, unlockSites } = await getState();
-        const set = new Set(whitelist);
-        set.add(host);
-        await chrome.storage.local.set({ whitelist: [...set] });
-        await syncEverything();
 
         await badgeFromMatched(tabId);
         const diag = getDiag(tabId);
@@ -418,7 +415,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           `Auto-unlock: ${readerAuto ? 'på' : 'av'}` +
             (unlockSites.includes(host) ? ' (+ alltid på denne siden)' : ''),
           '',
-          `Siden er nå whitelistet. Beskriv hva som var galt:`,
+          `Whitelistet:  ${isWhitelisted(host, whitelist) ? 'JA (blokkering av her)' : 'nei'}`,
+          '',
+          'Beskriv hva som var galt:',
         ];
         const text = lines.join('\n');
 
@@ -446,7 +445,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           savedAs = null;
         }
 
-        sendResponse({ ok: true, text, host, whitelisted: true, savedAs });
+        sendResponse({ ok: true, text, host, whitelisted: isWhitelisted(host, whitelist), savedAs });
         return;
       }
 
@@ -748,7 +747,37 @@ if (DEV_HOT_RELOAD) {
 
 // ---------- oppstart ----------
 
+/**
+ * Engangs-opprydding: «Noe er feil»-knappen whitelistet tidligere siden automatisk.
+ * Det var feil — rapporten skal ikke endre blokkeringen. Fjern derfor de domenene
+ * knappen selv la inn, slik at de blokkeres som normalt igjen.
+ */
+async function cleanupReportWhitelist() {
+  const { reportWhitelistCleaned, problemReports } = await chrome.storage.local.get([
+    'reportWhitelistCleaned',
+    'problemReports',
+  ]);
+  if (reportWhitelistCleaned) return;
+
+  const reported = new Set(
+    (Array.isArray(problemReports) ? problemReports : []).map((r) => r.host).filter(Boolean),
+  );
+  if (reported.size) {
+    const { whitelist } = await getState();
+    const cleaned = whitelist.filter((h) => !reported.has(h));
+    if (cleaned.length !== whitelist.length) {
+      await chrome.storage.local.set({ whitelist: cleaned });
+      console.info(
+        '[best-adblock] fjernet automatisk whitelistede rapport-domener:',
+        whitelist.filter((h) => reported.has(h)).join(', '),
+      );
+    }
+  }
+  await chrome.storage.local.set({ reportWhitelistCleaned: true });
+}
+
 async function boot() {
+  await cleanupReportWhitelist();
   await afterReloadRefresh();
   await syncEverything();
   setupCosmeticUpdater();
