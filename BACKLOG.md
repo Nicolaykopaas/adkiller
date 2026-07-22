@@ -15,13 +15,11 @@ Nye feil brukeren melder går forrest i køen, og skal få en regresjonsvakt i `
 ## Prioritert kø
 
 ### P0 — robusthet og feilsøking
-- [ ] **Diagnostikk-panel i popup:** vis hva som faktisk ble blokkert/skjult på denne
-      siden (antall per kategori + hvilke kosmetiske regler traff). Uten dette er
-      brukerrapporter som «virker ikke» umulige å feilsøke presist.
 - [ ] **«Noe er ødelagt»-knapp:** ett klikk som midlertidig deaktiverer utvidelsen for
       siden, laster på nytt, og husker valget. Gjør breakage ufarlig.
-- [ ] **Regelsett-helsesjekk:** varsle i popup/options hvis Chrome har deaktivert et
-      statisk regelsett (global regelgrense, jf. #2), i stedet for stille svikt.
+- [ ] **Trygg re-aktivering av YouTube-pruning:** `content/youtube.js.disabled` brøt
+      avspilling. Bygg fixture-test på lagret player-response, og legg den bak et
+      av-som-standard flagg i options før den registreres i manifestet igjen.
 
 ### P1 — blokkeringskvalitet
 - [ ] **Verifiser YouTube-pruningen mot ekte payloads:** legg inn en test som kjører
@@ -58,4 +56,5 @@ Nye feil brukeren melder går forrest i køen, og skal få en regresjonsvakt i `
 - [x] Verifiseringsharnisk (`npm run verify`) med regresjonsvakter — 14 sjekker.
 - [x] Facebook: unlock ødela scrolling (auto-modus krever nå vegg-deteksjon). `cab74b9`
 - [x] Aviser lastet ikke: pakk med AdGuards redirect-stubber. `52b8038`
-- [x] YouTube: fjern annonsefelt fra player-JSON. `e465a98`
+- [x] Diagnostikk-panel + regelsett-helsesjekk. `3ecfb8f`
+- [x] Stoppet to egne regresjoner: fane-reload og ødelagt YouTube. `a893d60`
