@@ -50,16 +50,11 @@
     if (overlayClose) overlayClose.click();
   }
 
-  // Kjør jevnlig (annonser dukker opp når som helst i en video) + ved DOM-endringer.
-  setInterval(skipVideoAd, 500);
-  try {
-    const obs = new MutationObserver(() => skipVideoAd());
-    const start = () => {
-      if (document.body) obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-      else requestAnimationFrame(start);
-    };
-    start();
-  } catch { /* ignorer */ }
+  // Kjør jevnlig. YTELSE: bruk IKKE en MutationObserver på hele YouTube-DOM-en —
+  // YouTube endrer klasser konstant, så en subtree-observer fyrer tusenvis av ganger
+  // og gjør siden treg. Et intervall er mer enn raskt nok til å fange annonser, og
+  // koster bare noen få querySelector-kall hvert sekund.
+  setInterval(skipVideoAd, 800);
 
   // ---------- LAG 1b: skjul statiske annonseflater ----------
 
@@ -135,13 +130,10 @@
     return data;
   }
 
-  try {
-    const nativeParse = JSON.parse;
-    JSON.parse = function (text, reviver) {
-      return tryPrune(nativeParse.call(this, text, reviver));
-    };
-  } catch { /* ignorer */ }
-
+  // YTELSE: vi overstyrer IKKE global JSON.parse — YouTube parser JSON tusenvis av
+  // ganger, og en wrapper på hver eneste parse belaster hele siden. player-response
+  // hentes via fetch (Response.json) og settes inline (ytInitialPlayerResponse); begge
+  // dekkes under. Den synlige annonseblokkeringen gjøres uansett av ad-skipperen over.
   try {
     const nativeJson = Response.prototype.json;
     Response.prototype.json = function () {

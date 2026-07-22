@@ -13,13 +13,11 @@ const DEFAULT_STATE = {
   rulesets: DEFAULT_RULESETS,
   readerAuto: true, // "lås opp artikkel" automatisk på alle sider (standard på)
   unlockSites: [], // eller kun for disse domenene
-  youtubePrune: false, // eksperimentell YouTube-annonseblokkering (av som standard)
 };
 
-// Dynamisk registrert content-script for YouTube. Registreres KUN når brukeren har
-// skrudd på funksjonen, slik at et tidligere avspillingsproblem ikke kan ramme
-// noen som ikke har bedt om den.
-const YT_SCRIPT_ID = 'best-adblock-youtube';
+// YouTube-blokkeringen er ALLTID på (content/youtube.js registrert statisk i
+// manifestet). Ingen bryter — annonser på YouTube skal aldri kunne vises.
+const YT_SCRIPT_ID = 'best-adblock-youtube'; // gammel dynamisk id, avregistreres ved oppstart
 
 // Dynamiske regler starter på denne id-en (unngår kollisjon med statiske regelsett).
 const DYNAMIC_RULE_BASE = 1_000_000;
@@ -64,38 +62,19 @@ async function getState() {
     rulesets: { ...DEFAULT_RULESETS, ...(s.rulesets || {}) },
     readerAuto: s.readerAuto !== false, // standard: på
     unlockSites: Array.isArray(s.unlockSites) ? s.unlockSites : [],
-    youtubePrune: s.youtubePrune === true, // standard: av
   };
 }
 
 /**
- * Registrer/avregistrer YouTube-scriptet etter brukerens valg.
- * Er funksjonen av, finnes scriptet ikke i nettleseren i det hele tatt — det er
- * hele poenget etter at forrige versjon hindret videoer i å spille.
+ * YouTube-scriptet ble tidligere registrert dynamisk bak en bryter. Nå er det statisk
+ * i manifestet (alltid på). Avregistrer derfor en evt. gammel dynamisk registrering,
+ * ellers ville scriptet kjørt to ganger.
  */
-async function syncYouTubeScript(enabled, youtubePrune) {
-  const shouldRun = enabled && youtubePrune;
+async function unregisterOldYouTubeScript() {
   try {
     const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [YT_SCRIPT_ID] });
-    const isRegistered = existing.length > 0;
-
-    if (shouldRun && !isRegistered) {
-      await chrome.scripting.registerContentScripts([
-        {
-          id: YT_SCRIPT_ID,
-          matches: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*'],
-          js: ['content/youtube.js'],
-          runAt: 'document_start',
-          allFrames: true,
-          world: 'MAIN',
-        },
-      ]);
-    } else if (!shouldRun && isRegistered) {
-      await chrome.scripting.unregisterContentScripts({ ids: [YT_SCRIPT_ID] });
-    }
-  } catch (err) {
-    console.debug('[best-adblock] kunne ikke synke YouTube-scriptet', err);
-  }
+    if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [YT_SCRIPT_ID] });
+  } catch { /* ingen gammel registrering */ }
 }
 
 function normalizeHost(host) {
@@ -171,10 +150,9 @@ async function applyWhitelistRules(whitelist) {
 }
 
 async function syncEverything() {
-  const { enabled, whitelist, rulesets, youtubePrune } = await getState();
+  const { enabled, whitelist, rulesets } = await getState();
   await applyEnabledRulesets(enabled, rulesets);
   await applyWhitelistRules(enabled ? whitelist : []);
-  await syncYouTubeScript(enabled, youtubePrune);
   await refreshAllBadges();
 }
 
@@ -327,15 +305,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       case 'getOptions': {
-        const { enabled, whitelist, rulesets, readerAuto, unlockSites, youtubePrune } = await getState();
-        sendResponse({ enabled, whitelist, rulesets, readerAuto, unlockSites, youtubePrune });
+        const { enabled, whitelist, rulesets, readerAuto, unlockSites } = await getState();
+        sendResponse({ enabled, whitelist, rulesets, readerAuto, unlockSites });
         return;
       }
 
-      case 'setYoutubePrune': {
-        await chrome.storage.local.set({ youtubePrune: !!msg.value });
-        const { enabled: en } = await getState();
-        await syncYouTubeScript(en, !!msg.value);
+      case 'clearWhitelist': {
+        // Tøm hele whitelisten på brukerens forespørsel — full kontroll og innsyn.
+        await chrome.storage.local.set({ whitelist: [] });
+        await syncEverything();
         sendResponse({ ok: true });
         return;
       }
@@ -796,36 +774,24 @@ if (DEV_HOT_RELOAD) {
 // ---------- oppstart ----------
 
 /**
- * Engangs-opprydding: «Noe er feil»-knappen whitelistet tidligere siden automatisk.
- * Det var feil — rapporten skal ikke endre blokkeringen. Fjern derfor de domenene
- * knappen selv la inn, slik at de blokkeres som normalt igjen.
+ * Engangs-opprydding: «Noe er feil»-knappen whitelistet tidligere sider automatisk.
+ * Det var feil. Tøm derfor HELE whitelisten én gang, slik at ingenting brukeren ikke
+ * selv har valgt blir stående. Etter dette styrer kun brukeren whitelisten.
  */
 async function cleanupReportWhitelist() {
-  const { reportWhitelistCleaned, problemReports } = await chrome.storage.local.get([
-    'reportWhitelistCleaned',
-    'problemReports',
-  ]);
-  if (reportWhitelistCleaned) return;
+  const { whitelistForceClearedV2 } = await chrome.storage.local.get('whitelistForceClearedV2');
+  if (whitelistForceClearedV2) return;
 
-  const reported = new Set(
-    (Array.isArray(problemReports) ? problemReports : []).map((r) => r.host).filter(Boolean),
-  );
-  if (reported.size) {
-    const { whitelist } = await getState();
-    const cleaned = whitelist.filter((h) => !reported.has(h));
-    if (cleaned.length !== whitelist.length) {
-      await chrome.storage.local.set({ whitelist: cleaned });
-      console.info(
-        '[best-adblock] fjernet automatisk whitelistede rapport-domener:',
-        whitelist.filter((h) => reported.has(h)).join(', '),
-      );
-    }
+  const { whitelist } = await getState();
+  if (whitelist.length) {
+    console.info('[best-adblock] tømmer whitelist (engangs):', whitelist.join(', '));
   }
-  await chrome.storage.local.set({ reportWhitelistCleaned: true });
+  await chrome.storage.local.set({ whitelist: [], whitelistForceClearedV2: true });
 }
 
 async function boot() {
   await cleanupReportWhitelist();
+  await unregisterOldYouTubeScript();
   await afterReloadRefresh();
   await syncEverything();
   setupCosmeticUpdater();

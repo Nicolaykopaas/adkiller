@@ -37,23 +37,6 @@
       </section>
 
       <section class="card">
-        <h2>YouTube-annonser (eksperimentell)</h2>
-        <p class="hint">
-          Fjerner annonsefelt fra YouTubes player-data. Dette er den eneste måten å stoppe
-          YouTube-annonser på, siden de sendes fra samme server som videoen. Et tidligere
-          forsøk hindret videoer i å spille — skru av igjen med én gang hvis avspilling
-          slutter å virke.
-        </p>
-        <label class="row">
-          <div>
-            <strong>Blokker annonser på YouTube</strong>
-          </div>
-          <input type="checkbox" id="youtubePrune" />
-        </label>
-        <p class="hint">Last YouTube på nytt etter at du har endret denne.</p>
-      </section>
-
-      <section class="card">
         <h2>Lås opp artikkel (fjern lesevegg)</h2>
         <p class="hint">
           Fjerner myke lesevegger der artikkelen alt er lastet inn (overlegg, scroll-lås,
@@ -71,8 +54,10 @@
 
       <section class="card">
         <h2>Tillatte sider (whitelist)</h2>
+        <p class="hint">Kun sider du selv har valgt å tillate annonser på. YouTube blokkeres alltid, uansett.</p>
         <ul id="whitelist" class="whitelist"></ul>
         <p id="emptyWl" class="empty">Ingen sider er tillatt ennå.</p>
+        <button id="clearWhitelist" type="button">Tøm hele whitelisten</button>
       </section>
 
       <section class="card">

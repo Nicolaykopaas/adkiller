@@ -207,6 +207,18 @@ if (fs.existsSync(p('content', 'youtube.js'))) {
   if (!/ad-showing/.test(ytSrc) || !/ytp-ad-skip-button/.test(ytSrc)) {
     fail('youtube.js mangler annonse-hopping i spilleren (JSON-pruning alene er ikke nok)');
   } else ok('youtube.js hopper over annonser i spilleren');
+
+  // YTELSE: en subtree-MutationObserver på YouTube-DOM-en gjorde siden treg.
+  if (/new MutationObserver/.test(ytSrc)) {
+    fail('youtube.js bruker MutationObserver — gjorde YouTube tregt, bruk intervall');
+  } else ok('youtube.js unngår tung MutationObserver på YouTube');
+
+  // YouTube skal ALLTID være på — registrert statisk i manifestet, ingen bryter.
+  const ytStatic = (manifest.content_scripts || []).some((cs) =>
+    (cs.js || []).some((j) => j.endsWith('youtube.js')),
+  );
+  if (!ytStatic) fail('content/youtube.js er ikke registrert statisk i manifestet (skal alltid være på)');
+  else ok('YouTube-blokkering er alltid på (statisk content-script)');
 }
 
 const popupBlockerSrc = fs.readFileSync(p('content', 'popup-blocker.js'), 'utf8');
