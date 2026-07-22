@@ -56,6 +56,12 @@ const NON_NATIVE_SELECTOR = /:(?:-abp-|contains|has-text|matches-css|matches-med
 
 const CHROME_MAX_REGEX_RULES = 1000; // per utvidelse, globalt
 
+// Redirect-ressurser (nøytraliserte stubber) fra @adguard/scriptlets.
+const REDIRECT_SRC_DIR = path.join(
+  ROOT, 'node_modules', '@adguard', 'scriptlets', 'dist', 'redirect-files',
+);
+const WAR_REDIRECTS_DIR = path.join(ROOT, 'web-accessible-resources', 'redirects');
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -71,18 +77,42 @@ function readRuleset(id) {
 }
 
 /**
- * Noen AdGuard-regler omdirigerer til pakkede "redirect"-ressurser
+ * AdGuard-regler kan omdirigere til pakkede "redirect"-ressurser
  * (action.redirect.extensionPath -> /web-accessible-resources/redirects/*.js).
- * Vi pakker ikke disse ressursene, så en slik redirect ville gi 404 og potensielt
- * ødelegge sider. Gjør dem om til rene block-regler i stedet (#1).
- * URL-param-fjerning (transform.queryTransform / transform.query) er ufarlig og beholdes.
+ * Disse serverer NØYTRALISERTE stubber (f.eks. tom adsbygoogle.js) slik at sider som
+ * venter på annonsescriptet fortsatt rendrer. Blokkerer man dem i stedet, kan sider
+ * (typisk aviser) henge eller aldri vise innholdet.
+ *
+ * Vi kopierer derfor ressursene fra @adguard/scriptlets og beholder redirectene.
+ * Kun redirects vi IKKE har en fil for gjøres om til block.
  */
+function copyRedirectResources() {
+  ensureDir(WAR_REDIRECTS_DIR);
+  if (!fs.existsSync(REDIRECT_SRC_DIR)) {
+    console.warn(`  ⚠ Fant ikke ${REDIRECT_SRC_DIR} — redirects blir til block-regler.`);
+    return 0;
+  }
+  let n = 0;
+  for (const name of fs.readdirSync(REDIRECT_SRC_DIR)) {
+    fs.copyFileSync(path.join(REDIRECT_SRC_DIR, name), path.join(WAR_REDIRECTS_DIR, name));
+    n++;
+  }
+  return n;
+}
+
+function haveRedirectResource(extensionPath) {
+  const name = String(extensionPath).split('/').pop();
+  return fs.existsSync(path.join(WAR_REDIRECTS_DIR, name));
+}
+
 function sanitizeRedirect(rule) {
   if (rule.action?.type !== 'redirect') return rule;
   const r = rule.action.redirect || {};
-  if (r.extensionPath || r.url) {
-    return { ...rule, action: { type: 'block' } };
+  if (r.extensionPath) {
+    // Behold redirecten hvis vi faktisk har ressursen; ellers blokker.
+    return haveRedirectResource(r.extensionPath) ? rule : { ...rule, action: { type: 'block' } };
   }
+  if (r.url) return { ...rule, action: { type: 'block' } }; // ekstern URL — ikke ønskelig
   return rule; // transform-baserte redirects er trygge
 }
 
@@ -109,6 +139,8 @@ function countRegex(rules) {
 }
 
 function buildNetworkRulesets() {
+  const copied = copyRedirectResources();
+  console.log(`› Kopierte ${copied} redirect-ressurser til web-accessible-resources/redirects/`);
   console.log('› Bygger nettverks-regelsett (DNR) fra AdGuard …');
   let totalRules = 0;
   let totalRegex = 0;
