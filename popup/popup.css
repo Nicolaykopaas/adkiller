@@ -71,6 +71,12 @@ header h1 { font-size: 15px; font-weight: 600; flex: 1; }
 .wl-btn:hover { background: #f0f0f4; }
 .wl-btn.active { background: #fdf1c9; border-color: #e6c34a; }
 
+.report-btn {
+  border-color: #e8bfa4;
+  color: #cb4b16;
+}
+.report-btn:hover { background: #fdf2ec; }
+
 .unlock-always {
   display: flex;
   align-items: center;
@@ -156,6 +162,8 @@ footer a:hover { text-decoration: underline; }
   .wl-btn { background: #2a2a32; border-color: #3a3a44; color: #e6e6ea; }
   .wl-btn:hover { background: #33333d; }
   .wl-btn.active { background: #3a3320; border-color: #6b5a1e; }
+  .report-btn { background: #2a2a32; border-color: #6b3a1c; color: #e8945c; }
+  .report-btn:hover { background: #352a26; }
   .diag-warn { background: #3a2216; border-color: #a03d10; color: #f4b183; }
   footer { border-color: #2a2a32; }
 }

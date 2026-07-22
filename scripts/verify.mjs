@@ -191,6 +191,27 @@ if (/writable:\s*false/.test(popupBlockerSrc)) {
   fail('popup-blocker.js låser window.open med writable:false (kan kaste TypeError på ekte sider)');
 } else ok('window.open-overstyringen er kompatibel (accessor)');
 
+// ---------- 6. Meldingsprotokoll ----------
+// Fanger protokoll-drift: UI/content som sender en meldingstype uten handler i
+// service workeren (lett å innføre når UI-arbeid gjøres separat fra bakgrunnen).
+section('Meldingsprotokoll');
+const handled = new Set([...swSrc.matchAll(/case\s+'([A-Za-z]+)'/g)].map((m) => m[1]));
+for (const file of [
+  'popup/popup.js',
+  'options/options.js',
+  'content/cosmetic.js',
+  'content/reader-unlock.js',
+  'content/element-picker.js',
+  'content/state-bridge.js',
+]) {
+  if (!fs.existsSync(p(file))) continue;
+  const src = fs.readFileSync(p(file), 'utf8');
+  const sent = [...new Set([...src.matchAll(/type:\s*'([A-Za-z]+)'/g)].map((m) => m[1]))];
+  const unknown = sent.filter((t) => !handled.has(t));
+  if (unknown.length) fail(`${file} sender meldinger uten handler i bakgrunnen: ${unknown.join(', ')}`);
+  else if (sent.length) ok(`${file}: ${sent.length} meldingstyper har handler`);
+}
+
 // ---------- oppsummering ----------
 console.log('\n' + '─'.repeat(60));
 if (failures) {

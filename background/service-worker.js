@@ -342,6 +342,73 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
 
+      /**
+       * «Noe er feil»: lager en feilrapport for aktiv side og whitelister den med
+       * én gang, slik at brukeren kommer videre mens feilen undersøkes.
+       * Rapporten er ren tekst laget for å limes rett inn i en samtale.
+       */
+      case 'reportProblem': {
+        const tabId = msg.tabId;
+        const tab = tabId != null ? await chrome.tabs.get(tabId).catch(() => null) : null;
+        if (!tab || !/^https?:/.test(tab.url || '')) {
+          sendResponse({ ok: false });
+          return;
+        }
+
+        let host = '';
+        try {
+          host = normalizeHost(new URL(tab.url).hostname);
+        } catch {
+          sendResponse({ ok: false });
+          return;
+        }
+
+        // Whitelist siden så den virker med en gang.
+        const { whitelist, enabled, readerAuto, unlockSites } = await getState();
+        const set = new Set(whitelist);
+        set.add(host);
+        await chrome.storage.local.set({ whitelist: [...set] });
+        await syncEverything();
+
+        await badgeFromMatched(tabId);
+        const diag = getDiag(tabId);
+        const health = await rulesetHealth();
+        const manifest = chrome.runtime.getManifest();
+
+        const lines = [
+          'BEST ADBLOCK — FEILRAPPORT',
+          `URL:        ${tab.url}`,
+          `Domene:     ${host}`,
+          `Tidspunkt:  ${new Date().toISOString()}`,
+          `Versjon:    ${manifest.version} (${IS_DEV ? 'utpakket/dev' : 'pakket'})`,
+          '',
+          `Blokkert:   ${tabBlockCount.get(tabId) || 0} forespørsler ` +
+            `(annonser ${diag.byRuleset.ads}, sporing ${diag.byRuleset.privacy}, ` +
+            `irritasjoner ${diag.byRuleset.annoyances}, dynamisk ${diag.byRuleset.dynamic})`,
+          `Kosmetisk:  ${diag.cosmetic.specific} regler, generisk ${diag.cosmetic.generic ? 'på' : 'AV'}, ` +
+            `${diag.cosmetic.user} egne`,
+          `Lås opp:    ${diag.unlock.ran ? `kjørte, fjernet ${diag.unlock.removed}` : 'ikke utløst'}`,
+          '',
+          `Utvidelse:  ${enabled ? 'på' : 'AV'}`,
+          `Regelsett:  aktive [${health.active.join(', ') || 'ingen'}]` +
+            (health.missing.length ? `  ⚠ MANGLER [${health.missing.join(', ')}]` : ''),
+          `Auto-unlock: ${readerAuto ? 'på' : 'av'}` +
+            (unlockSites.includes(host) ? ' (+ alltid på denne siden)' : ''),
+          '',
+          `Siden er nå whitelistet. Beskriv hva som var galt:`,
+        ];
+        const text = lines.join('\n');
+
+        // Behold de siste 20 rapportene så de kan hentes fram senere.
+        const { problemReports } = await chrome.storage.local.get('problemReports');
+        const reports = Array.isArray(problemReports) ? problemReports : [];
+        reports.unshift({ host, url: tab.url, at: Date.now(), text });
+        await chrome.storage.local.set({ problemReports: reports.slice(0, 20) });
+
+        sendResponse({ ok: true, text, host, whitelisted: true });
+        return;
+      }
+
       // ---- "Lås opp artikkel" ----
       case 'runUnlock': {
         const tabId = msg.tabId;

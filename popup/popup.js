@@ -3,6 +3,7 @@ const whitelistBtn = document.getElementById('whitelistBtn');
 const pickerBtn = document.getElementById('pickerBtn');
 const unlockBtn = document.getElementById('unlockBtn');
 const unlockAlways = document.getElementById('unlockAlways');
+const reportBtn = document.getElementById('reportBtn');
 const blockedCount = document.getElementById('blockedCount');
 const hostLabel = document.getElementById('hostLabel');
 const statusDot = document.getElementById('statusDot');
@@ -14,6 +15,7 @@ const diagPanel = document.getElementById('diagPanel');
 let currentTab = null;
 let currentHost = '';
 let diagLoaded = false;
+let reportBusy = false;
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -40,6 +42,7 @@ function render(state) {
   const isHttp = url.startsWith('http://') || url.startsWith('https://');
   pickerBtn.disabled = !isHttp;
   unlockBtn.disabled = !isHttp;
+  if (!reportBusy) reportBtn.disabled = !isHttp;
 
   unlockAlways.checked = !!state.unlockThisSite;
   unlockAlways.disabled = !currentHost;
@@ -83,6 +86,47 @@ unlockBtn.addEventListener('click', async () => {
     const url = currentTab?.url || '';
     unlockBtn.disabled = !(url.startsWith('http://') || url.startsWith('https://'));
   }, 2000);
+});
+
+reportBtn.addEventListener('click', async () => {
+  if (reportBusy) return;
+  reportBusy = true;
+  reportBtn.disabled = true;
+
+  let message = 'Kunne ikke lage rapport';
+  let ok = false;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const res = await chrome.runtime.sendMessage({ type: 'reportProblem', tabId: tab.id });
+    if (res && res.ok) {
+      ok = true;
+      message = 'Kopiert ✓ — lim inn til Claude';
+      try {
+        await navigator.clipboard.writeText(res.text);
+      } catch (e) {
+        message = 'Rapport laget (kopiering feilet)';
+      }
+    }
+  } catch (e) {
+    message = 'Kunne ikke lage rapport';
+  }
+
+  reportBtn.textContent = message;
+
+  if (ok) {
+    try {
+      await refresh();
+    } catch (e) {
+      /* ignorer */
+    }
+  }
+
+  setTimeout(() => {
+    reportBusy = false;
+    reportBtn.textContent = '⚠ Noe er feil';
+    const url = currentTab?.url || '';
+    reportBtn.disabled = !(url.startsWith('http://') || url.startsWith('https://'));
+  }, 3000);
 });
 
 unlockAlways.addEventListener('change', async () => {
