@@ -1,0 +1,194 @@
+/**
+ * Verifiseringsharnisk — kjøres før hver commit (`npm run verify`).
+ *
+ * Fanger regresjoner automatisk, inkludert de to reelle feilene vi har hatt:
+ *   - redirect-regler som peker på ressurser som ikke finnes (aviser lastet ikke)
+ *   - unlock-motor uten vegg-deteksjon (ødela scrolling på Facebook)
+ *
+ * Exit-kode 1 hvis noe feiler, slik at en autonom loop ikke kan pushe ødelagt kode.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const p = (...a) => path.join(ROOT, ...a);
+
+let failures = 0;
+let checks = 0;
+const fail = (msg) => {
+  failures++;
+  console.error(`  ✗ ${msg}`);
+};
+const ok = (msg) => {
+  checks++;
+  console.log(`  ✓ ${msg}`);
+};
+
+function section(name) {
+  console.log(`\n› ${name}`);
+}
+
+// ---------- 1. manifest ----------
+section('Manifest');
+let manifest;
+try {
+  manifest = JSON.parse(fs.readFileSync(p('manifest.json'), 'utf8'));
+  ok('manifest.json er gyldig JSON');
+} catch (err) {
+  fail(`manifest.json kunne ikke parses: ${err.message}`);
+  process.exit(1);
+}
+
+const refs = [
+  manifest.background?.service_worker,
+  manifest.action?.default_popup,
+  manifest.options_page,
+  ...Object.values(manifest.icons || {}),
+];
+for (const cs of manifest.content_scripts || []) refs.push(...(cs.js || []));
+for (const rr of manifest.declarative_net_request?.rule_resources || []) refs.push(rr.path);
+
+const missingRefs = refs.filter((r) => r && !fs.existsSync(p(r)));
+if (missingRefs.length) fail(`manglende filer i manifestet: ${missingRefs.join(', ')}`);
+else ok(`alle ${refs.length} manifest-referanser finnes`);
+
+// web_accessible_resources: sjekk ikke-glob-oppføringer
+for (const entry of manifest.web_accessible_resources || []) {
+  for (const res of entry.resources || []) {
+    if (res.includes('*')) {
+      const dir = p(path.dirname(res));
+      if (!fs.existsSync(dir)) fail(`web_accessible glob peker på manglende mappe: ${res}`);
+    } else if (!fs.existsSync(p(res))) {
+      fail(`web_accessible ressurs mangler: ${res}`);
+    }
+  }
+}
+ok('web_accessible_resources er konsistent');
+
+// ---------- 2. JS-syntaks ----------
+section('JS-syntaks');
+const jsFiles = [];
+for (const dir of ['background', 'content', 'popup', 'options', 'scripts']) {
+  const d = p(dir);
+  if (!fs.existsSync(d)) continue;
+  for (const f of fs.readdirSync(d)) {
+    if (f.endsWith('.js') || f.endsWith('.mjs')) jsFiles.push(path.join(dir, f));
+  }
+}
+for (const f of jsFiles) {
+  try {
+    execFileSync(process.execPath, ['--check', p(f)], { stdio: 'pipe' });
+  } catch (err) {
+    fail(`syntaksfeil i ${f}: ${String(err.stderr || err).slice(0, 200)}`);
+  }
+}
+ok(`${jsFiles.length} JS-filer passerte syntakssjekk`);
+
+// ---------- 3. DNR-regelsett ----------
+section('DNR-regelsett');
+const CHROME_MAX_REGEX = 1000;
+let totalRegex = 0;
+let redirectMissing = 0;
+let redirectOk = 0;
+
+for (const rr of manifest.declarative_net_request?.rule_resources || []) {
+  const file = p(rr.path);
+  if (!fs.existsSync(file)) {
+    fail(`regelsett mangler: ${rr.path} (kjør npm run build)`);
+    continue;
+  }
+  let rules;
+  try {
+    rules = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    fail(`${rr.path} er ugyldig JSON: ${err.message}`);
+    continue;
+  }
+  if (!Array.isArray(rules) || rules.length === 0) {
+    fail(`${rr.path} er tomt`);
+    continue;
+  }
+
+  const ids = new Set();
+  let dupes = 0;
+  for (const r of rules) {
+    if (ids.has(r.id)) dupes++;
+    ids.add(r.id);
+    if (r.condition?.regexFilter) totalRegex++;
+    const ep = r.action?.redirect?.extensionPath;
+    if (ep) {
+      if (fs.existsSync(p(ep.replace(/^\//, '')))) redirectOk++;
+      else redirectMissing++;
+    }
+  }
+  if (dupes) fail(`${rr.path} har ${dupes} duplikate regel-id-er`);
+  else ok(`${rr.path}: ${rules.length} regler, unike id-er`);
+}
+
+if (totalRegex > CHROME_MAX_REGEX) fail(`${totalRegex} regex-regler > Chromes grense ${CHROME_MAX_REGEX}`);
+else ok(`${totalRegex} regex-regler (under grensen på ${CHROME_MAX_REGEX})`);
+
+// REGRESJONSVAKT: aviser lastet ikke fordi redirect-ressurser manglet
+if (redirectMissing > 0) {
+  fail(`${redirectMissing} redirect-regler peker på ressurser som IKKE finnes ` +
+       '(dette brøt avis-sider tidligere — kjør npm run build)');
+} else {
+  ok(`alle ${redirectOk} redirect-regler har en eksisterende stub-ressurs`);
+}
+
+// ---------- 4. Kosmetiske regler ----------
+section('Kosmetiske regler');
+const specPath = p('rules', 'specific-hide.json');
+if (!fs.existsSync(specPath)) {
+  fail('rules/specific-hide.json mangler (kjør npm run build)');
+} else {
+  const data = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+  if (data.v !== 2) fail(`specific-hide.json har uventet skjemaversjon: ${data.v}`);
+  else if (!Array.isArray(data.rules) || !data.index) fail('specific-hide.json mangler rules/index');
+  else {
+    let badRef = 0;
+    for (const key of Object.keys(data.index)) {
+      for (const i of data.index[key]) {
+        if (!data.rules[i]) badRef++;
+      }
+    }
+    if (badRef) fail(`${badRef} indeks-oppføringer peker på ikke-eksisterende regler`);
+    else ok(`${data.rules.length} regler i ${Object.keys(data.index).length} bøtter, indeks konsistent`);
+  }
+}
+
+const genPath = p('rules', 'generic-hide.css');
+if (!fs.existsSync(genPath)) fail('rules/generic-hide.css mangler');
+else {
+  const css = fs.readFileSync(genPath, 'utf8');
+  if (/:contains\(|:-abp-|:xpath\(|:has-text\(/.test(css)) {
+    fail('generic-hide.css inneholder ikke-native selektorer (ville ødelagt CSS-grupper)');
+  } else ok('generic-hide.css inneholder kun native selektorer');
+}
+
+// ---------- 5. Regresjonsvakter i kildekoden ----------
+section('Regresjonsvakter');
+const unlockSrc = fs.readFileSync(p('content', 'reader-unlock.js'), 'utf8');
+// Facebook-feilen: auto-modus må kreve at en vegg faktisk finnes
+if (!/function detectWall/.test(unlockSrc) || !/!aggressive && !detectWall\(\)/.test(unlockSrc)) {
+  fail('reader-unlock.js mangler vegg-deteksjon i auto-modus (brøt scrolling på Facebook)');
+} else ok('unlock-motoren krever vegg-deteksjon i auto-modus');
+
+if (!/APP_HOSTS/.test(unlockSrc)) fail('reader-unlock.js mangler APP_HOSTS-unntak');
+else ok('unlock-motoren hopper over app-sider i auto-modus');
+
+const popupBlockerSrc = fs.readFileSync(p('content', 'popup-blocker.js'), 'utf8');
+// window.open må være en accessor (ikke writable:false) for å unngå TypeError
+if (/writable:\s*false/.test(popupBlockerSrc)) {
+  fail('popup-blocker.js låser window.open med writable:false (kan kaste TypeError på ekte sider)');
+} else ok('window.open-overstyringen er kompatibel (accessor)');
+
+// ---------- oppsummering ----------
+console.log('\n' + '─'.repeat(60));
+if (failures) {
+  console.error(`✗ ${failures} feil funnet (${checks} sjekker passerte).`);
+  process.exit(1);
+}
+console.log(`✓ Alt OK — ${checks} sjekker passerte.`);
