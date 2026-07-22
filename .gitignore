@@ -24,3 +24,6 @@ nyfil.py
 .DS_Store
 *.log
 web-accessible-resources/
+
+# Ad-testverktøyets skjermbilder
+scripts/adtest-out/

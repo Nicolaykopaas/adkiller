@@ -10,7 +10,9 @@
     "build": "npm run build:icons && npm run build:filters",
     "bump": "node scripts/bump-version.mjs",
     "dev": "node scripts/watch.mjs",
-    "verify": "node scripts/verify.mjs && node scripts/test-prune.mjs"
+    "verify": "node scripts/verify.mjs && node scripts/test-prune.mjs",
+    "adtest": "node scripts/adtest.mjs",
+    "dnr-probe": "node scripts/dnr-probe.mjs"
   },
   "devDependencies": {
     "@adguard/dnr-rulesets": "^4.1.20260721220037",

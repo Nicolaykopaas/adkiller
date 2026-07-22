@@ -227,6 +227,21 @@ if (/writable:\s*false/.test(popupBlockerSrc)) {
   fail('popup-blocker.js låser window.open med writable:false (kan kaste TypeError på ekte sider)');
 } else ok('window.open-overstyringen er kompatibel (accessor)');
 
+// ---------- 5b. Test-harness laster utvidelsen riktig ----------
+// Moderne Chrome ignorerer --load-extension stille, så en harness som bruker det
+// måler en UBESKYTTET nettleser og gir falske "ads slipper gjennom"-resultater.
+// Harnessene MÅ laste via CDP Extensions.loadUnpacked.
+section('Test-harness');
+for (const file of ['scripts/adtest.mjs', 'scripts/dnr-probe.mjs']) {
+  if (!fs.existsSync(p(file))) continue;
+  const src = fs.readFileSync(p(file), 'utf8');
+  if (/['"`]--load-extension/.test(src)) {
+    fail(`${file} bruker --load-extension (ignoreres av moderne Chrome — måler ubeskyttet nettleser)`);
+  } else if (!/Extensions\.loadUnpacked/.test(src)) {
+    fail(`${file} laster ikke utvidelsen via Extensions.loadUnpacked`);
+  } else ok(`${file} laster utvidelsen korrekt via CDP`);
+}
+
 // ---------- 6. Meldingsprotokoll ----------
 // Fanger protokoll-drift: UI/content som sender en meldingstype uten handler i
 // service workeren (lett å innføre når UI-arbeid gjøres separat fra bakgrunnen).
