@@ -69,10 +69,15 @@
       .catch(() => ({}));
   }
 
+  // Tellere for diagnostikk-panelet.
+  let genericApplied = false;
+  let specificCount = 0;
+
   // 1) Generiske skjuleregler
   try {
     const generic = stored.cosmetic_generic || (await fetchText('rules/generic-hide.css'));
     injectStyle('best-adblock-generic', generic);
+    genericApplied = !!generic;
   } catch (err) {
     console.debug('[best-adblock] generic-hide feilet', err);
   }
@@ -96,6 +101,7 @@
           const style = rule.style || 'display: none !important';
           if (!byStyle.has(style)) byStyle.set(style, []);
           byStyle.get(style).push(rule.s);
+          specificCount++;
         }
       }
       let css = '';
@@ -107,6 +113,7 @@
   }
 
   // 3) #10 Brukerens egne regler for dette domenet
+  let userCount = 0;
   try {
     const { userRules } = await chrome.storage.local.get('userRules');
     if (userRules) {
@@ -114,11 +121,22 @@
       for (const [domain, sels] of Object.entries(userRules)) {
         if (hostMatches(domain)) selectors.push(...sels);
       }
+      userCount = selectors.length;
       if (selectors.length) {
         injectStyle('best-adblock-user', `${selectors.join(',\n')} { display: none !important }`);
       }
     }
   } catch (err) {
     console.debug('[best-adblock] user-rules feilet', err);
+  }
+
+  // Meld inn til diagnostikk-panelet hva vi faktisk gjorde på denne siden.
+  if (isTop) {
+    chrome.runtime
+      .sendMessage({
+        type: 'reportDiag',
+        cosmetic: { specific: specificCount, generic: genericApplied, user: userCount },
+      })
+      .catch(() => {});
   }
 })();

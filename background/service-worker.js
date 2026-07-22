@@ -24,6 +24,23 @@ const IS_DEV = !!chrome.declarativeNetRequest.onRuleMatchedDebug;
 
 // Per-fane teller for blokkerte forespørsler (nullstilles ved ny navigasjon).
 const tabBlockCount = new Map();
+
+// Per-fane diagnostikk: hva ble faktisk blokkert/skjult på denne siden.
+// Uten dette er brukerrapporter som «virker ikke» umulige å feilsøke presist.
+const tabDiag = new Map();
+
+function freshDiag() {
+  return {
+    byRuleset: { ads: 0, privacy: 0, annoyances: 0, dynamic: 0 },
+    cosmetic: { specific: 0, generic: false, user: 0 },
+    unlock: { ran: false, removed: 0 },
+  };
+}
+
+function getDiag(tabId) {
+  if (!tabDiag.has(tabId)) tabDiag.set(tabId, freshDiag());
+  return tabDiag.get(tabId);
+}
 // Tidspunkt for siste hovednavigasjon per fane (for badge-fallback via getMatchedRules).
 const tabNavStart = new Map();
 
@@ -135,6 +152,12 @@ if (IS_DEV) {
     const next = (tabBlockCount.get(tabId) || 0) + 1;
     tabBlockCount.set(tabId, next);
     setBadge(tabId, next);
+
+    // Fordel treffet på kategori, så diagnostikk-panelet kan vise hva som skjer.
+    const diag = getDiag(tabId);
+    const rs = info.rule?.rulesetId;
+    if (rs && Object.prototype.hasOwnProperty.call(diag.byRuleset, rs)) diag.byRuleset[rs]++;
+    else diag.byRuleset.dynamic++;
   });
 }
 
@@ -159,6 +182,7 @@ chrome.webNavigation?.onCommitted.addListener((details) => {
   if (details.frameId !== 0) return;
   tabNavStart.set(details.tabId, Date.now());
   tabBlockCount.set(details.tabId, 0);
+  tabDiag.set(details.tabId, freshDiag());
   setBadge(details.tabId, 0);
 });
 
@@ -171,7 +195,24 @@ chrome.webNavigation?.onCompleted.addListener((details) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabBlockCount.delete(tabId);
   tabNavStart.delete(tabId);
+  tabDiag.delete(tabId);
 });
+
+/**
+ * Helsesjekk: har Chrome faktisk aktivert regelsettene vi ba om?
+ * Med ~173k statiske regler kan Chrome stille deaktivere regelsett når den globale
+ * regelpuljen er brukt opp (f.eks. hvis en annen DNR-utvidelse er installert).
+ * Uten denne sjekken svikter blokkeringen uten noe synlig varsel.
+ */
+async function rulesetHealth() {
+  const { enabled, rulesets } = await getState();
+  const intended = enabled ? STATIC_RULESETS.filter((id) => rulesets[id] !== false) : [];
+  let active = [];
+  try {
+    active = await chrome.declarativeNetRequest.getEnabledRulesets();
+  } catch { /* kan feile tidlig i oppstart */ }
+  return { intended, active, missing: intended.filter((id) => !active.includes(id)) };
+}
 
 // ---------- meldinger fra popup / content ----------
 
@@ -263,6 +304,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           active: enabled && !whitelisted, // kosmetisk skjuling respekterer også whitelist
           readerAuto, // auto "lås opp artikkel" globalt
           unlockThisSite: host ? unlockSites.includes(host) : false,
+        });
+        return;
+      }
+
+      // ---- diagnostikk ----
+      case 'reportDiag': {
+        // Content-scripts melder hva de faktisk gjorde på denne siden.
+        const tabId = sender.tab?.id;
+        if (tabId != null && tabId >= 0) {
+          const diag = getDiag(tabId);
+          if (msg.cosmetic) Object.assign(diag.cosmetic, msg.cosmetic);
+          if (msg.unlock) Object.assign(diag.unlock, msg.unlock);
+        }
+        sendResponse({ ok: true });
+        return;
+      }
+
+      case 'getDiagnostics': {
+        const tabId = msg.tabId;
+        if (tabId != null) await badgeFromMatched(tabId); // frisk opp i fallback-modus
+        const diag = tabId != null ? getDiag(tabId) : freshDiag();
+        const b = diag.byRuleset;
+        sendResponse({
+          blocked: {
+            total: tabId != null ? tabBlockCount.get(tabId) || 0 : 0,
+            ads: b.ads,
+            privacy: b.privacy,
+            annoyances: b.annoyances,
+            dynamic: b.dynamic,
+          },
+          cosmetic: diag.cosmetic,
+          unlock: diag.unlock,
+          rulesets: await rulesetHealth(),
+          precise: IS_DEV, // kun i dev har vi eksakt per-kategori-telling
         });
         return;
       }

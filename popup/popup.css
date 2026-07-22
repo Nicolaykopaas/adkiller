@@ -97,6 +97,56 @@ header h1 { font-size: 15px; font-weight: 600; flex: 1; }
   word-break: break-all;
 }
 
+.diag { padding: 4px 16px 0; }
+
+.diag-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.diag-arrow { font-size: 10px; color: #9a9aa4; transition: transform 0.15s; }
+
+.diag-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.diag-row .diag-label { font-size: 11px; color: #9a9aa4; }
+.diag-row .diag-value { text-align: right; word-break: break-word; }
+
+.diag-sub {
+  font-size: 11px;
+  color: #9a9aa4;
+  padding: 1px 0 3px 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hint { font-size: 11px; color: #9a9aa4; margin-top: 6px; }
+
+.diag-warn {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid #cb4b16;
+  background: #fdece2;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #8a3208;
+}
+
 footer { padding: 12px 16px; text-align: center; border-top: 1px solid #eee; margin-top: 8px; }
 footer a { font-size: 12px; color: #268bd2; text-decoration: none; }
 footer a:hover { text-decoration: underline; }
@@ -106,5 +156,6 @@ footer a:hover { text-decoration: underline; }
   .wl-btn { background: #2a2a32; border-color: #3a3a44; color: #e6e6ea; }
   .wl-btn:hover { background: #33333d; }
   .wl-btn.active { background: #3a3320; border-color: #6b5a1e; }
+  .diag-warn { background: #3a2216; border-color: #a03d10; color: #f4b183; }
   footer { border-color: #2a2a32; }
 }

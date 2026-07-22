@@ -230,6 +230,10 @@
     const removed = removeOverlays(aggressive);
     unblur();
     observeFor(aggressive ? 6000 : 4000, aggressive);
+    // Meld inn til diagnostikk-panelet at vi faktisk kjørte her.
+    chrome.runtime
+      .sendMessage({ type: 'reportDiag', unlock: { ran: true, removed } })
+      .catch(() => {});
     return removed;
   }
 
