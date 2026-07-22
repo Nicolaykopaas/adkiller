@@ -15,8 +15,6 @@ Nye feil brukeren melder går forrest i køen, og skal få en regresjonsvakt i `
 ## Prioritert kø
 
 ### P0 — robusthet og feilsøking
-- [ ] **«Noe er ødelagt»-knapp:** ett klikk som midlertidig deaktiverer utvidelsen for
-      siden, laster på nytt, og husker valget. Gjør breakage ufarlig.
 - [ ] **Trygg re-aktivering av YouTube-pruning:** `content/youtube.js.disabled` brøt
       avspilling. Bygg fixture-test på lagret player-response, og legg den bak et
       av-som-standard flagg i options før den registreres i manifestet igjen.
@@ -56,5 +54,6 @@ Nye feil brukeren melder går forrest i køen, og skal få en regresjonsvakt i `
 - [x] Verifiseringsharnisk (`npm run verify`) med regresjonsvakter — 14 sjekker.
 - [x] Facebook: unlock ødela scrolling (auto-modus krever nå vegg-deteksjon). `cab74b9`
 - [x] Aviser lastet ikke: pakk med AdGuards redirect-stubber. `52b8038`
+- [x] «Noe er feil»-knapp med ferdig feilrapport + protokoll-sjekk. `702a25f`
 - [x] Diagnostikk-panel + regelsett-helsesjekk. `3ecfb8f`
 - [x] Stoppet to egne regresjoner: fane-reload og ødelagt YouTube. `a893d60`
