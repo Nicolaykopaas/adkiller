@@ -13,7 +13,13 @@ const DEFAULT_STATE = {
   rulesets: DEFAULT_RULESETS,
   readerAuto: true, // "lås opp artikkel" automatisk på alle sider (standard på)
   unlockSites: [], // eller kun for disse domenene
+  youtubePrune: false, // eksperimentell YouTube-annonseblokkering (av som standard)
 };
+
+// Dynamisk registrert content-script for YouTube. Registreres KUN når brukeren har
+// skrudd på funksjonen, slik at et tidligere avspillingsproblem ikke kan ramme
+// noen som ikke har bedt om den.
+const YT_SCRIPT_ID = 'best-adblock-youtube';
 
 // Dynamiske regler starter på denne id-en (unngår kollisjon med statiske regelsett).
 const DYNAMIC_RULE_BASE = 1_000_000;
@@ -58,7 +64,38 @@ async function getState() {
     rulesets: { ...DEFAULT_RULESETS, ...(s.rulesets || {}) },
     readerAuto: s.readerAuto !== false, // standard: på
     unlockSites: Array.isArray(s.unlockSites) ? s.unlockSites : [],
+    youtubePrune: s.youtubePrune === true, // standard: av
   };
+}
+
+/**
+ * Registrer/avregistrer YouTube-scriptet etter brukerens valg.
+ * Er funksjonen av, finnes scriptet ikke i nettleseren i det hele tatt — det er
+ * hele poenget etter at forrige versjon hindret videoer i å spille.
+ */
+async function syncYouTubeScript(enabled, youtubePrune) {
+  const shouldRun = enabled && youtubePrune;
+  try {
+    const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [YT_SCRIPT_ID] });
+    const isRegistered = existing.length > 0;
+
+    if (shouldRun && !isRegistered) {
+      await chrome.scripting.registerContentScripts([
+        {
+          id: YT_SCRIPT_ID,
+          matches: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*'],
+          js: ['content/youtube.js'],
+          runAt: 'document_start',
+          allFrames: true,
+          world: 'MAIN',
+        },
+      ]);
+    } else if (!shouldRun && isRegistered) {
+      await chrome.scripting.unregisterContentScripts({ ids: [YT_SCRIPT_ID] });
+    }
+  } catch (err) {
+    console.debug('[best-adblock] kunne ikke synke YouTube-scriptet', err);
+  }
 }
 
 function normalizeHost(host) {
@@ -134,9 +171,10 @@ async function applyWhitelistRules(whitelist) {
 }
 
 async function syncEverything() {
-  const { enabled, whitelist, rulesets } = await getState();
+  const { enabled, whitelist, rulesets, youtubePrune } = await getState();
   await applyEnabledRulesets(enabled, rulesets);
   await applyWhitelistRules(enabled ? whitelist : []);
+  await syncYouTubeScript(enabled, youtubePrune);
   await refreshAllBadges();
 }
 
@@ -289,8 +327,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       case 'getOptions': {
-        const { enabled, whitelist, rulesets, readerAuto, unlockSites } = await getState();
-        sendResponse({ enabled, whitelist, rulesets, readerAuto, unlockSites });
+        const { enabled, whitelist, rulesets, readerAuto, unlockSites, youtubePrune } = await getState();
+        sendResponse({ enabled, whitelist, rulesets, readerAuto, unlockSites, youtubePrune });
+        return;
+      }
+
+      case 'setYoutubePrune': {
+        await chrome.storage.local.set({ youtubePrune: !!msg.value });
+        const { enabled: en } = await getState();
+        await syncYouTubeScript(en, !!msg.value);
+        sendResponse({ ok: true });
         return;
       }
 
@@ -417,7 +463,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           '',
           `Whitelistet:  ${isWhitelisted(host, whitelist) ? 'JA (blokkering av her)' : 'nei'}`,
           '',
-          'Beskriv hva som var galt:',
+          // Symptomet er det ene tallene ikke kan gi: "videoen spiller ikke" og
+          // "annonser vises" krever motsatte fikser.
+          `SYMPTOM:    ${String(msg.note || '').trim() || '(ikke oppgitt)'}`,
         ];
         const text = lines.join('\n');
 

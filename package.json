@@ -9,7 +9,8 @@
     "build:icons": "node scripts/make-icons.mjs",
     "build": "npm run build:icons && npm run build:filters",
     "bump": "node scripts/bump-version.mjs",
-    "dev": "node scripts/watch.mjs"
+    "dev": "node scripts/watch.mjs",
+    "verify": "node scripts/verify.mjs && node scripts/test-prune.mjs"
   },
   "devDependencies": {
     "@adguard/dnr-rulesets": "^4.1.20260721220037",

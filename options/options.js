@@ -5,6 +5,7 @@ const cosmeticStatus = document.getElementById('cosmeticStatus');
 const userRulesEl = document.getElementById('userRules');
 const emptyUserRules = document.getElementById('emptyUserRules');
 const readerAuto = document.getElementById('readerAuto');
+const youtubePrune = document.getElementById('youtubePrune');
 const unlockSitesEl = document.getElementById('unlockSites');
 const emptyUnlock = document.getElementById('emptyUnlock');
 
@@ -23,6 +24,8 @@ async function load() {
   }
 
   renderWhitelist(state.whitelist);
+
+  youtubePrune.checked = !!state.youtubePrune;
 
   readerAuto.checked = !!state.readerAuto;
   renderUnlockSites(state.unlockSites || []);
@@ -128,6 +131,10 @@ function renderUserRules(rules) {
     userRulesEl.appendChild(ul);
   }
 }
+
+youtubePrune.addEventListener('change', async () => {
+  await chrome.runtime.sendMessage({ type: 'setYoutubePrune', value: youtubePrune.checked });
+});
 
 readerAuto.addEventListener('change', async () => {
   await chrome.runtime.sendMessage({ type: 'setReaderAuto', value: readerAuto.checked });

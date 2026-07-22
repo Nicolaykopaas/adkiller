@@ -4,6 +4,7 @@ const pickerBtn = document.getElementById('pickerBtn');
 const unlockBtn = document.getElementById('unlockBtn');
 const unlockAlways = document.getElementById('unlockAlways');
 const reportBtn = document.getElementById('reportBtn');
+const reportNote = document.getElementById('reportNote');
 const blockedCount = document.getElementById('blockedCount');
 const hostLabel = document.getElementById('hostLabel');
 const statusDot = document.getElementById('statusDot');
@@ -42,7 +43,10 @@ function render(state) {
   const isHttp = url.startsWith('http://') || url.startsWith('https://');
   pickerBtn.disabled = !isHttp;
   unlockBtn.disabled = !isHttp;
-  if (!reportBusy) reportBtn.disabled = !isHttp;
+  if (!reportBusy) {
+    reportBtn.disabled = !isHttp;
+    reportNote.disabled = !isHttp;
+  }
 
   unlockAlways.checked = !!state.unlockThisSite;
   unlockAlways.disabled = !currentHost;
@@ -92,14 +96,20 @@ reportBtn.addEventListener('click', async () => {
   if (reportBusy) return;
   reportBusy = true;
   reportBtn.disabled = true;
+  reportNote.disabled = true;
 
   let message = 'Kunne ikke lage rapport';
   let ok = false;
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const res = await chrome.runtime.sendMessage({ type: 'reportProblem', tabId: tab.id });
+    const res = await chrome.runtime.sendMessage({
+      type: 'reportProblem',
+      tabId: tab.id,
+      note: reportNote.value,
+    });
     if (res && res.ok) {
       ok = true;
+      reportNote.value = '';
       // Rapporten skrives til fil; utklippstavla er bare en ekstra bekvemmelighet.
       message = res.savedAs ? 'Rapport lagret ✓' : 'Rapport laget (ikke lagret til fil)';
       try {
@@ -126,7 +136,9 @@ reportBtn.addEventListener('click', async () => {
     reportBusy = false;
     reportBtn.textContent = '⚠ Noe er feil';
     const url = currentTab?.url || '';
-    reportBtn.disabled = !(url.startsWith('http://') || url.startsWith('https://'));
+    const isHttp = url.startsWith('http://') || url.startsWith('https://');
+    reportBtn.disabled = !isHttp;
+    reportNote.disabled = !isHttp;
   }, 3000);
 });
 
