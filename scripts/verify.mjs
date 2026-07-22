@@ -200,6 +200,15 @@ if (/chrome\.tabs\.reload/.test(swSrc)) {
   }
 }
 
+// YouTube: ren JSON-pruning er ikke nok — motoren MÅ også hoppe over annonser i
+// spilleren (.ad-showing -> spol/hopp). Ellers vises annonser selv med funksjonen på.
+if (fs.existsSync(p('content', 'youtube.js'))) {
+  const ytSrc = fs.readFileSync(p('content', 'youtube.js'), 'utf8');
+  if (!/ad-showing/.test(ytSrc) || !/ytp-ad-skip-button/.test(ytSrc)) {
+    fail('youtube.js mangler annonse-hopping i spilleren (JSON-pruning alene er ikke nok)');
+  } else ok('youtube.js hopper over annonser i spilleren');
+}
+
 const popupBlockerSrc = fs.readFileSync(p('content', 'popup-blocker.js'), 'utf8');
 // window.open må være en accessor (ikke writable:false) for å unngå TypeError
 if (/writable:\s*false/.test(popupBlockerSrc)) {

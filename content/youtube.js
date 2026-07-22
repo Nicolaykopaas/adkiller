@@ -1,28 +1,100 @@
 /**
  * YouTube-annonseblokkering (eksperimentell, av som standard).
  *
- * YouTube-annonser sendes fra samme server som videoen og planlegges via JSON i
- * "player response". Nettverksregler (DNR) kan derfor ikke stoppe dem — den eneste
- * virksomme måten er å fjerne annonsefeltene før spilleren leser dem.
+ * YouTube-annonser sendes fra samme server som videoen. Ren JSON-pruning er ikke nok
+ * lenger, og å røre videostrømmen knekker avspilling. Derfor to lag, slik de enkle
+ * «AdBlock for YouTube»-utvidelsene gjør det:
  *
- * Dette er vår egen pakkede kode; ingenting kjøres fra nettet. Scriptet registreres
- * dynamisk av service workeren KUN når brukeren har skrudd på funksjonen, slik at det
- * ikke finnes i nettleseren i det hele tatt når den er av.
+ *   LAG 1 — hopp forbi annonser i selve spilleren:
+ *     Når spilleren har klassen `.ad-showing`, spol annonse-videoen til slutten og
+ *     trykk «Hopp over». Rører ALDRI den ekte videoen, så avspilling kan ikke knekke.
  *
- * Forrige forsøk hindret videoer i å spille. Derfor er denne versjonen strengere:
- *  - kun felter som planlegger annonser fjernes
- *  - vi rører kun objekter som faktisk ser ut som en player response
- *  - streamingData / videoDetails / playabilityStatus røres ALDRI (spilleren
- *    trenger dem for å kunne spille av)
+ *   LAG 2 — fjern annonseplanlegging fra player-JSON (best effort, forsiktig):
+ *     Fjern kun annonsefelt, kun på objekter som faktisk er en player response.
+ *     streamingData/videoDetails/playabilityStatus røres aldri.
+ *
+ * Registreres dynamisk av service workeren KUN når brukeren har skrudd på funksjonen.
  */
 (() => {
   if (window.__bestAdblockYtLoaded) return;
   window.__bestAdblockYtLoaded = true;
 
+  // ---------- LAG 1: hopp over annonser i spilleren ----------
+
+  function skipVideoAd() {
+    const player = document.getElementById('movie_player');
+    const showingAd = player && player.classList.contains('ad-showing');
+
+    if (showingAd) {
+      const video = document.querySelector('.html5-main-video, video');
+      if (video && isFinite(video.duration) && video.duration > 0) {
+        video.muted = true;
+        // Spol til slutten av annonse-strømmen — YouTube går da videre til innholdet.
+        try {
+          video.currentTime = video.duration;
+        } catch { /* ignorer */ }
+      }
+    }
+
+    // Trykk «Hopp over»-knappen så snart den finnes (alle kjente varianter).
+    const skip = document.querySelector(
+      '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, ' +
+        '.ytp-ad-skip-button-container button',
+    );
+    if (skip) skip.click();
+
+    // Lukk overleggs-/banner-annonser.
+    const overlayClose = document.querySelector(
+      '.ytp-ad-overlay-close-button, .ytp-ad-overlay-close-container',
+    );
+    if (overlayClose) overlayClose.click();
+  }
+
+  // Kjør jevnlig (annonser dukker opp når som helst i en video) + ved DOM-endringer.
+  setInterval(skipVideoAd, 500);
+  try {
+    const obs = new MutationObserver(() => skipVideoAd());
+    const start = () => {
+      if (document.body) obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+      else requestAnimationFrame(start);
+    };
+    start();
+  } catch { /* ignorer */ }
+
+  // ---------- LAG 1b: skjul statiske annonseflater ----------
+
+  function injectCss() {
+    if (document.getElementById('best-adblock-yt-css')) return;
+    const style = document.createElement('style');
+    style.id = 'best-adblock-yt-css';
+    style.textContent = `
+      #masthead-ad,
+      ytd-ad-slot-renderer,
+      ytd-in-feed-ad-layout-renderer,
+      ytd-banner-promo-renderer,
+      ytd-statement-banner-renderer,
+      ytd-primetime-promo-renderer,
+      #player-ads,
+      #panels ytd-ads-engagement-panel-content-renderer,
+      .ytp-ad-overlay-slot,
+      .ytp-ad-overlay-container,
+      .ytd-companion-slot-renderer,
+      ytd-companion-slot-renderer {
+        display: none !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  injectCss();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectCss, { once: true });
+  }
+
+  // ---------- LAG 2: fjern annonseplanlegging fra player-JSON ----------
+
   const AD_KEYS = ['adPlacements', 'playerAds', 'adSlots', 'adBreakHeartbeatParams'];
   const MAX_DEPTH = 8;
 
-  /** Ser objektet ut som en YouTube player response? */
   function isPlayerResponse(o) {
     return !!(
       o &&
@@ -32,7 +104,6 @@
     );
   }
 
-  /** Fjerner annonsefelt på plass. Returnerer antall fjernede felter. */
   function pruneAds(node, depth = 0) {
     if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return 0;
     let removed = 0;
@@ -47,13 +118,9 @@
         try {
           delete node[key];
           removed++;
-        } catch {
-          /* ikke-slettbar — la den stå heller enn å kaste */
-        }
+        } catch { /* ikke-slettbar */ }
       }
     }
-
-    // Gå videre nedover for nøstede player responses (f.eks. { playerResponse: {...} }).
     for (const key of Object.keys(node)) {
       const val = node[key];
       if (val && typeof val === 'object') removed += pruneAds(val, depth + 1);
@@ -64,34 +131,24 @@
   function tryPrune(data) {
     try {
       if (isPlayerResponse(data)) pruneAds(data);
-    } catch {
-      /* vår kode skal aldri ødelegge sidens egen parsing */
-    }
+    } catch { /* aldri ødelegg sidens egen parsing */ }
     return data;
   }
 
-  // 1) JSON.parse — brukes av YouTube for mange interne svar.
   try {
     const nativeParse = JSON.parse;
     JSON.parse = function (text, reviver) {
       return tryPrune(nativeParse.call(this, text, reviver));
     };
-  } catch {
-    /* ignorer */
-  }
+  } catch { /* ignorer */ }
 
-  // 2) Response.json — /youtubei/v1/player hentes via fetch ved videobytte i SPA-en.
   try {
     const nativeJson = Response.prototype.json;
     Response.prototype.json = function () {
       return nativeJson.call(this).then(tryPrune);
     };
-  } catch {
-    /* ignorer */
-  }
+  } catch { /* ignorer */ }
 
-  // 3) ytInitialPlayerResponse — settes inline i HTML ved første sidelasting, altså
-  //    før noen fetch skjer. Uten denne slipper pre-roll på første video gjennom.
   try {
     let stored;
     Object.defineProperty(window, 'ytInitialPlayerResponse', {
@@ -104,7 +161,5 @@
         stored = tryPrune(value);
       },
     });
-  } catch {
-    /* ignorer */
-  }
+  } catch { /* ignorer */ }
 })();
