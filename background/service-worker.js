@@ -22,6 +22,9 @@ const DYNAMIC_RULE_BASE = 1_000_000;
 // uten ekstra permission. Brukes til å gate hot-reload og live badge-teller.
 const IS_DEV = !!chrome.declarativeNetRequest.onRuleMatchedDebug;
 
+// Feilrapporter skrives hit (relativt til nettleserens nedlastingsmappe).
+const REPORT_DIR = 'adkiller-reports';
+
 // Per-fane teller for blokkerte forespørsler (nullstilles ved ny navigasjon).
 const tabBlockCount = new Map();
 
@@ -405,7 +408,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         reports.unshift({ host, url: tab.url, at: Date.now(), text });
         await chrome.storage.local.set({ problemReports: reports.slice(0, 20) });
 
-        sendResponse({ ok: true, text, host, whitelisted: true });
+        // Skriv rapporten til fil i Nedlastinger, så den kan leses uten at brukeren
+        // trenger å lime inn noe. Utvidelser kan kun skrive under nedlastingsmappa.
+        // (Service workers har ikke URL.createObjectURL — derfor data-URL.)
+        let savedAs = null;
+        try {
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          savedAs = `${REPORT_DIR}/${stamp}_${host}.txt`;
+          await chrome.downloads.download({
+            url: 'data:text/plain;charset=utf-8,' + encodeURIComponent(text),
+            filename: savedAs,
+            conflictAction: 'uniquify',
+            saveAs: false,
+          });
+        } catch (err) {
+          console.debug('[best-adblock] kunne ikke lagre rapport til fil', err);
+          savedAs = null;
+        }
+
+        sendResponse({ ok: true, text, host, whitelisted: true, savedAs });
         return;
       }
 

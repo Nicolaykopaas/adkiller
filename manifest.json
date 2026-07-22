@@ -12,7 +12,8 @@
     "scripting",
     "tabs",
     "webNavigation",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
   "host_permissions": ["<all_urls>"],
 

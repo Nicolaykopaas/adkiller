@@ -100,11 +100,12 @@ reportBtn.addEventListener('click', async () => {
     const res = await chrome.runtime.sendMessage({ type: 'reportProblem', tabId: tab.id });
     if (res && res.ok) {
       ok = true;
-      message = 'Kopiert ✓ — lim inn til Claude';
+      // Rapporten skrives til fil; utklippstavla er bare en ekstra bekvemmelighet.
+      message = res.savedAs ? 'Rapport lagret ✓' : 'Rapport laget (ikke lagret til fil)';
       try {
         await navigator.clipboard.writeText(res.text);
       } catch (e) {
-        message = 'Rapport laget (kopiering feilet)';
+        /* utklippstavle er valgfri — filen er det som teller */
       }
     }
   } catch (e) {
