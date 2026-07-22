@@ -65,6 +65,17 @@ function normalizeHost(host) {
   return String(host || '').toLowerCase().replace(/^www\./, '');
 }
 
+/**
+ * Whitelist-treff må inkludere underdomener, ellers spriker lagene:
+ * DNR-regelen bruker `requestDomains`, som ALLTID dekker underdomener, mens en
+ * `includes()`-sjekk krever eksakt treff. Det ga f.eks. på tv.vg.no at
+ * nettverksblokkering var av mens kosmetisk skjuling fortsatt var på.
+ */
+function isWhitelisted(host, whitelist) {
+  if (!host) return false;
+  return whitelist.some((w) => host === w || host.endsWith('.' + w));
+}
+
 // ---------- DNR-styring ----------
 
 async function applyEnabledRulesets(enabled, rulesets) {
@@ -246,7 +257,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({
           enabled,
           host,
-          whitelisted: host ? whitelist.includes(host) : false,
+          whitelisted: isWhitelisted(host, whitelist),
           blocked: msg.tabId ? tabBlockCount.get(msg.tabId) || 0 : 0,
           readerAuto,
           unlockThisSite: host ? unlockSites.includes(host) : false,
@@ -310,7 +321,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } catch {
           host = '';
         }
-        const whitelisted = host ? whitelist.includes(host) : false;
+        const whitelisted = isWhitelisted(host, whitelist);
         sendResponse({
           enabled, // popup-blokkering følger av/på-bryteren
           active: enabled && !whitelisted, // kosmetisk skjuling respekterer også whitelist
