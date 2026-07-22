@@ -1,118 +1,127 @@
-# Best AdBlock
+# adkiller
 
-En kraftig, personlig annonseblokkerer for Chrome (Manifest V3). Blokkerer reklame,
-sporing, popups og pop-unders på alle nettsider, skjuler «annonsørinnhold», og kan låse
-opp artikler bak myke lesevegger — bygget på etablerte filterlister (AdGuard, EasyList,
-Nordic, anti-paywall).
+**Annonser er leie. Denne utvidelsen dreper dem.**
 
-## Funksjoner
+En Chrome-utvidelse (Manifest V3) bygget på ett prinsipp: ingenting som prøver å selge
+deg noe skal få lov til å laste, tegne seg, hoppe opp, spore deg eller stå i veien for
+det du faktisk kom for. Reklamebransjen har hatt tretti år på å gjøre nettet uleselig.
+Dette er regningen.
 
-- **Nettverksblokkering (DNR):** ~173 000 forhåndsbygde AdGuard-regler stopper annonse-
-  og sporingsforespørsler før de lastes.
-- **Kosmetisk skjuling:** ~14 000 generiske + ~12 000 sidespesifikke element-hiding-regler
-  fra EasyList/EasyPrivacy + Dandelion Sprouts Nordic-liste (skjuler bl.a. VGs
-  «annonsørinnhold»/partnerstudio).
-- **Popup- & pop-under-blokkering:** fanger kaprede klikk (også overlegg-lenker over
-  videoer på streaming-/piratsider) uten å ødelegge ekte lenker og innloggings-popups.
-- **Lås opp artikkel:** fjerner myke lesevegger (overlegg, scroll-lås, blur) der teksten
-  alt er lastet. På som standard for alle sider.
-- **Element-plukker:** klikk et element for å lage din egen skjuleregel.
-- **Av/på + whitelist per side**, badge-teller, og innstillingsside.
-- **Auto-oppdatering** av kosmetiske lister (ukentlig + manuelt).
-- **Hot-reload** i utvikling — utvidelsen laster seg selv på nytt ved filendringer.
+---
 
-## Kom i gang
+## Arsenalet
 
-Krever [Node.js](https://nodejs.org/) 18+ og Google Chrome (eller Edge/Brave).
+Annonser gjemmer seg på mange måter. Derfor er det syv angrepslinjer, ikke én.
+
+### 1. Nettverksblokkering — de får aldri lastet
+~173 000 regler fra AdGuard går rett i strupen på forespørselen. Annonseserveren blir
+aldri kontaktet. Ingen bytes, ingen sporing, ingen forsinkelse. Den billigste døden.
+
+### 2. Kosmetisk skjuling — restene ryddes bort
+~14 000 generiske og ~12 000 sidespesifikke skjuleregler fjerner det som overlever
+nettverkslaget: tomme annonsebokser, «sponset innhold», partnerstudio-artikler som
+utgir seg for å være journalistikk. Reglene er **indeksert etter domene**, så en side
+slår kun opp sine egne ~25 regler i stedet for å skanne alle 12 000.
+
+### 3. Nøytraliserte stubber — annonsescriptet får lyve
+Noen sider nekter å rendre uten annonsescriptet sitt. Fint. Vi serverer dem 43
+forfalskede, tomme versjoner — en `adsbygoogle.js` som ikke gjør noe, en analytics som
+måler ingenting. Siden tror den fikk det den ba om. Den fikk ingenting.
+
+### 4. Popup- og pop-under-drap
+`window.open` er kapret via en accessor siden ikke kan overskrive. Klikk-kaprede
+pop-unders, syntetiske lenkeklikk og usynlige overleggslenker lagt over videospillere
+blir fanget og nøytralisert — uten å ødelegge ekte lenker eller innloggingsvinduer.
+
+### 5. Leseveggen rives
+Sider som laster hele artikkelen og så gjemmer den bak et overlegg får overlegget
+fjernet, scroll-låsen brutt og blur-en nullstilt. Kjører automatisk, men **kun når en
+vegg faktisk oppdages** — app-sider som Facebook og Gmail røres aldri.
+
+### 6. YouTube (eksperimentell, av som standard)
+YouTube-annonser sendes fra samme server som videoen, så nettverksregler er
+maktesløse. Løsningen er å fjerne annonsefeltene fra spillerens JSON før den rekker å
+lese dem. Skrus på i Innstillinger.
+
+### 7. Element-plukkeren — din egen henrettelse
+Noe som overlevde alt dette? Klikk på det. Det kommer ikke tilbake.
+
+---
+
+## Installasjon
+
+Krever Node.js 18+ og Chrome.
 
 ```bash
-npm install      # henter build-avhengigheter
-npm run build    # genererer ikoner + filterregler (rules/) + version.json
+npm install
+npm run build     # bygger filterregler, stubber og ikoner
 ```
 
-Last inn i Chrome:
+`chrome://extensions` → **Developer mode** → **Load unpacked** → velg denne mappen.
 
-1. Åpne `chrome://extensions`
-2. Slå på **Developer mode** (øverst til høyre)
-3. Klikk **Load unpacked** og velg denne mappen
+> `rules/`, `web-accessible-resources/` og ikonene genereres av bygget og ligger ikke i
+> git. Kjør `npm install && npm run build` etter en fersk klone.
 
-> Merk: `rules/`, `version.json` og ikonene genereres av `npm run build` og er ikke i git.
-> Kjør derfor `npm install && npm run build` etter en fersk klone før du laster inn.
+---
 
 ## Bruk
 
-Klikk verktøylinje-ikonet:
+Klikk ikonet:
 
-| Handling | Hva den gjør |
-|----------|--------------|
-| **Av/på-bryter** | Skrur all blokkering av/på |
-| **Tillat annonser på denne siden** | Whitelister domenet (dynamisk allow-regel) |
-| **Blokker et element** | Starter element-plukkeren |
-| **Lås opp artikkel** | Fjerner myk lesevegg på siden nå |
-| **Alltid lås opp denne siden** | Auto-opplåsing for domenet |
+| Knapp | Hva den gjør |
+|---|---|
+| **Av/på** | Total våpenhvile |
+| **Tillat annonser på denne siden** | Kapitulasjon, per domene |
+| **Blokker et element** | Element-plukkeren |
+| **Lås opp artikkel** | River leseveggen nå |
+| **⚠ Noe er feil** | Lagrer en feilrapport. Endrer ingenting. |
+| **Detaljer** | Hva som faktisk ble drept på denne siden |
 
-Under **Innstillinger**: skru filterkategorier av/på, administrer whitelist og egne
-regler, styr auto-opplåsing, og oppdater kosmetiske lister.
+Går en side i stykker: skriv én linje i symptomfeltet og trykk **⚠ Noe er feil**.
+Rapporten havner i `Nedlastinger/adkiller-reports/` med URL, blokkerte forespørsler per
+kategori, kosmetiske treff og regelsett-helse. Knappen rører aldri blokkeringen — et
+måleinstrument som endrer det det måler er verdiløst.
 
-## Lås opp artikkel — hvordan og begrensning
+---
 
-Mange sider laster hele artikkelen, men skjuler den bak et overlegg, scroll-lås eller
-blur. Motoren gjenoppretter scrolling, fjerner overlegg/modaler (som matcher
-`paywall|subscribe|regwall|newsletter…`, men aldri `article/main/content`), og nullstiller
-blur/tekstklipp — pluss overvåker DOM-en i noen sekunder for sent-injiserte modaler.
+## Grenser
 
-> **Begrensning:** dette virker kun når innholdet allerede er sendt til nettleseren.
-> Harde betalingsmurer, der serveren aldri leverer teksten, kan ikke og skal ikke omgås.
+Ærlighet er bedre enn skryt:
+
+- **Harde betalingsmurer kan ikke fjernes.** Sender serveren aldri teksten, finnes den
+  ikke i nettleseren. Vi omgår ikke betaling eller innlogging.
+- **Server-sammensydde annonser** (deler av YouTube) er vevd inn i selve videostrømmen.
+- **MV3 er svakere enn gamle uBlock Origin.** Chrome fjernet verktøyene. Dekningen er
+  god, men ikke identisk.
+- **Vilkårlige scriptlets injiseres ikke** — bevisst valg av sikkerhets- og policyhensyn.
+
+---
 
 ## Utvikling
 
 ```bash
-npm run dev            # watcher: bumper version.json ved filendringer -> hot-reload
-npm run build:filters  # oppdater filterreglene på nytt
-npm run bump           # trigg hot-reload manuelt
+npm run dev       # watcher -> utvidelsen laster seg selv på nytt
+npm run verify    # 22 strukturkontroller + fixture-test. Rødt = ingen commit.
+npm run build:filters
 ```
 
-Hot-reload er **kun aktiv i dev** (utpakket utvidelse) — oppdages via `onRuleMatchedDebug`,
-som bare finnes for utpakkede utvidelser. En publisert utvidelse self-reloader aldri.
+`verify` inneholder regresjonsvakter for hver feil som har vært her før — scroll som
+brakk på app-sider, aviser som ikke lastet, faner som ble lastet på nytt midt i en
+video. De feilene kommer ikke tilbake.
 
-## Arkitektur
-
-```
-manifest.json                  MV3-manifest
-background/service-worker.js   av/på, whitelist, badge, unlock-state, list-oppdatering, hot-reload
-content/
-  popup-blocker.js             popup/pop-under-blokkering (MAIN world)
-  state-bridge.js              bro av/på-tilstand til popup-blocker
-  cosmetic.js                  injiserer kosmetiske skjuleregler (domene-indeksert)
-  reader-unlock.js             "lås opp artikkel"-motor
-  element-picker.js            element-plukker (injiseres på forespørsel)
-popup/                         verktøylinje-UI
-options/                       innstillingsside
-scripts/
-  build-filters.mjs            bygger DNR- + kosmetiske regler
-  make-icons.mjs               genererer ikoner
-  bump-version.mjs             bumper version.json
-  watch.mjs                    dev-watcher
-rules/          (generert)     DNR-regelsett + kosmetiske regler
-version.json    (generert)     hot-reload-stempel
-```
+---
 
 ## Filterkilder
 
-- [AdGuard DNR-rulesets](https://github.com/AdguardTeam/dnr-rulesets) (Base, Tracking,
-  Popups, Cookie Notices, Other Annoyances)
-- [EasyList + EasyPrivacy](https://easylist.to/)
-- [Dandelion Sprouts Nordic Filters](https://github.com/DandelionSprout/adfilt)
-- [liamengland1 anti-paywall](https://github.com/liamengland1/miscfilters)
+[AdGuard DNR-rulesets](https://github.com/AdguardTeam/dnr-rulesets) ·
+[EasyList + EasyPrivacy](https://easylist.to/) ·
+[Dandelion Sprouts Nordic Filters](https://github.com/DandelionSprout/adfilt) ·
+[liamengland1 anti-paywall](https://github.com/liamengland1/miscfilters) ·
+[AdGuard Scriptlets](https://github.com/AdguardTeam/Scriptlets) (redirect-stubber)
 
-## Begrensninger
+Takk til alle som vedlikeholder disse listene gratis, år etter år, mot en industri med
+uendelig med penger.
 
-- MV3/`declarativeNetRequest` er mindre fleksibelt enn gamle uBlock Origin (MV2).
-  Dekningen er svært god, men ikke 100 % identisk.
-- YouTube-annonser er delvis server-side og dekkes ikke fullstendig.
-- Vi injiserer ikke vilkårlige scriptlets (Chrome Web Store-policy / sikkerhet).
-- Filterlistene bør oppdateres jevnlig (kosmetikk auto-oppdateres; nettverk via rebuild).
+---
 
-## Personlig bruk
-
-Bygget som et personlig prosjekt. Ikke tilknyttet AdGuard, EasyList eller Google.
+Personlig prosjekt. Ikke tilknyttet AdGuard, EasyList eller Google.
