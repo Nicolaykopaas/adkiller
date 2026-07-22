@@ -34,7 +34,8 @@ const tabDiag = new Map();
 
 function freshDiag() {
   return {
-    byRuleset: { ads: 0, privacy: 0, annoyances: 0, dynamic: 0 },
+    byRuleset: { ads: 0, privacy: 0, annoyances: 0 },
+    allowed: 0,
     cosmetic: { specific: 0, generic: false, user: 0 },
     unlock: { ran: false, removed: 0 },
   };
@@ -152,15 +153,23 @@ if (IS_DEV) {
   chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
     const tabId = info.request.tabId;
     if (tabId < 0) return;
+
+    const diag = getDiag(tabId);
+    const rs = info.rule?.rulesetId;
+    const isStatic = rs && Object.prototype.hasOwnProperty.call(diag.byRuleset, rs);
+
+    if (!isStatic) {
+      // Dynamiske regler er våre whitelist-/allow-regler. Et treff der betyr at
+      // forespørselen ble TILLATT — ikke blokkert. Å telle dem som blokkeringer ga
+      // meningsløse tall (f.eks. "310 blokkert" på en whitelistet side).
+      diag.allowed++;
+      return;
+    }
+
+    diag.byRuleset[rs]++;
     const next = (tabBlockCount.get(tabId) || 0) + 1;
     tabBlockCount.set(tabId, next);
     setBadge(tabId, next);
-
-    // Fordel treffet på kategori, så diagnostikk-panelet kan vise hva som skjer.
-    const diag = getDiag(tabId);
-    const rs = info.rule?.rulesetId;
-    if (rs && Object.prototype.hasOwnProperty.call(diag.byRuleset, rs)) diag.byRuleset[rs]++;
-    else diag.byRuleset.dynamic++;
   });
 }
 
@@ -335,7 +344,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             ads: b.ads,
             privacy: b.privacy,
             annoyances: b.annoyances,
-            dynamic: b.dynamic,
+            allowed: diag.allowed,
           },
           cosmetic: diag.cosmetic,
           unlock: diag.unlock,
@@ -387,7 +396,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           '',
           `Blokkert:   ${tabBlockCount.get(tabId) || 0} forespørsler ` +
             `(annonser ${diag.byRuleset.ads}, sporing ${diag.byRuleset.privacy}, ` +
-            `irritasjoner ${diag.byRuleset.annoyances}, dynamisk ${diag.byRuleset.dynamic})`,
+            `irritasjoner ${diag.byRuleset.annoyances}; tillatt ${diag.allowed})`,
           `Kosmetisk:  ${diag.cosmetic.specific} regler, generisk ${diag.cosmetic.generic ? 'på' : 'AV'}, ` +
             `${diag.cosmetic.user} egne`,
           `Lås opp:    ${diag.unlock.ran ? `kjørte, fjernet ${diag.unlock.removed}` : 'ikke utløst'}`,

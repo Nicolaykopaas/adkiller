@@ -105,9 +105,20 @@ function haveRedirectResource(extensionPath) {
   return fs.existsSync(path.join(WAR_REDIRECTS_DIR, name));
 }
 
+/**
+ * Redirect-mål vi IKKE vil bruke: å erstatte video-annonse-SDK-et (IMA3) med en stub
+ * får spillere til å vente på et SDK som aldri svarer riktig — videoen henger.
+ * Vi lar IMA3 laste normalt; annonse-VIDEOEN fanges likevel av noopmp4/noopmp3,
+ * så annonsen hoppes over uten at avspillingen brekker.
+ */
+const DROP_REDIRECT_TARGETS = new Set(['google-ima3.js']);
+
 function sanitizeRedirect(rule) {
   if (rule.action?.type !== 'redirect') return rule;
   const r = rule.action.redirect || {};
+  if (r.extensionPath && DROP_REDIRECT_TARGETS.has(String(r.extensionPath).split('/').pop())) {
+    return null; // fjern regelen helt
+  }
   if (r.extensionPath) {
     // Behold redirecten hvis vi faktisk har ressursen; ellers blokker.
     return haveRedirectResource(r.extensionPath) ? rule : { ...rule, action: { type: 'block' } };
@@ -121,13 +132,19 @@ function buildNetworkRuleset(ids) {
   let nextId = 1;
   const merged = [];
   let redirectsConverted = 0;
+  let redirectsDropped = 0;
   for (const id of ids) {
     for (const rule of readRuleset(id)) {
       const clean = sanitizeRedirect(rule);
+      if (clean === null) {
+        redirectsDropped++;
+        continue;
+      }
       if (clean !== rule) redirectsConverted++;
       merged.push({ ...clean, id: nextId++ });
     }
   }
+  buildNetworkRuleset.lastRedirectsDropped = redirectsDropped;
   buildNetworkRuleset.lastRedirectsConverted = redirectsConverted;
   return merged;
 }
