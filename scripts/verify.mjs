@@ -179,6 +179,12 @@ if (!/function detectWall/.test(unlockSrc) || !/!aggressive && !detectWall\(\)/.
 if (!/APP_HOSTS/.test(unlockSrc)) fail('reader-unlock.js mangler APP_HOSTS-unntak');
 else ok('unlock-motoren hopper over app-sider i auto-modus');
 
+// Hot-reload må ALDRI laste brukerens faner på nytt (kastet brukeren ut av videoer).
+const swSrc = fs.readFileSync(p('background', 'service-worker.js'), 'utf8');
+if (/chrome\.tabs\.reload/.test(swSrc)) {
+  fail('service-worker.js kaller chrome.tabs.reload — hot-reload må aldri laste brukerens faner');
+} else ok('hot-reload laster aldri brukerens faner');
+
 const popupBlockerSrc = fs.readFileSync(p('content', 'popup-blocker.js'), 'utf8');
 // window.open må være en accessor (ikke writable:false) for å unngå TypeError
 if (/writable:\s*false/.test(popupBlockerSrc)) {

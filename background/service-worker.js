@@ -534,20 +534,20 @@ async function checkForReload() {
     return;
   }
   if (current !== hotBuild) {
-    // Lagre ny versjon FØR reload for å unngå reload-løkke, og be om fane-refresh.
-    await chrome.storage.local.set({ hotBuild: current, hotReloadRefresh: true });
+    // Lagre ny versjon FØR reload for å unngå reload-løkke.
+    await chrome.storage.local.set({ hotBuild: current });
     chrome.runtime.reload();
   }
 }
 
+/**
+ * VIKTIG: hot-reload skal ALDRI laste brukerens faner på nytt.
+ * Tidligere refreshet vi aktiv fane etter en reload — det kastet brukeren ut av
+ * videoer midt i avspilling hver gang en ny build ble bygget. Nye content-scripts
+ * trer i kraft ved neste naturlige sidelasting; det er godt nok.
+ */
 async function afterReloadRefresh() {
-  const { hotReloadRefresh } = await chrome.storage.local.get('hotReloadRefresh');
-  if (!hotReloadRefresh) return;
-  await chrome.storage.local.remove('hotReloadRefresh');
-  const tabs = await chrome.tabs.query({ active: true });
-  for (const t of tabs) {
-    if (t.id && /^https?:/.test(t.url || '')) chrome.tabs.reload(t.id);
-  }
+  await chrome.storage.local.remove('hotReloadRefresh'); // rydd bort gammelt flagg
 }
 
 function setupHotReload() {
