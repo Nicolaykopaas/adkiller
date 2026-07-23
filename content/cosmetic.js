@@ -64,6 +64,19 @@
     return (await fetch(url(p))).json();
   }
 
+  // Kryssorigin subframe (f.eks. innebygd videospiller): injiser KUN en liten,
+  // målrettet annonse-CSS. Å injisere hele 14k-selektor-lista i hver iframe gjorde
+  // sider trege — derfor bare de vanligste annonse-overleggene her.
+  if (!scoped) {
+    const FRAME_AD_CSS =
+      'ins.adsbygoogle,.adsbygoogle,[id^="google_ads"],[id*="div-gpt-ad"],' +
+      '[class*="video-ads"],[class*="ad-overlay"],[class*="adOverlay"],[class*="ads-overlay"],' +
+      '[id*="ad-overlay"],[id*="ad_overlay"],[id*="preroll"],[class*="preroll"]' +
+      '{display:none!important}';
+    injectStyle('best-adblock-frame-ads', FRAME_AD_CSS);
+    return;
+  }
+
   // ---- last inn lister: foretrekk oppdatert versjon fra storage (kun i toppframe) ----
   let stored = {};
   if (isTop) {
@@ -76,20 +89,13 @@
   let genericApplied = false;
   let specificCount = 0;
 
-  // 1) Generiske skjuleregler
+  // 1) Generiske skjuleregler (full liste — kun toppframe/same-origin)
   try {
     const generic = stored.cosmetic_generic || (await fetchText('rules/generic-hide.css'));
     injectStyle('best-adblock-generic', generic);
     genericApplied = !!generic;
   } catch (err) {
     console.debug('[best-adblock] generic-hide feilet', err);
-  }
-
-  // 2) + 3) kjører kun i toppframe/same-origin — domene-spesifikke regler og egne
-  // regler er knyttet til toppsidens domene og gir ikke mening i kryssorigin-iframes.
-  if (!scoped) {
-    // Kryssorigin subframe: kun generisk skjuling, ferdig.
-    return;
   }
 
   // 2) Domene-spesifikke regler (indeksert)

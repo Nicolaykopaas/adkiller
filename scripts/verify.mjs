@@ -221,11 +221,16 @@ if (fs.existsSync(p('content', 'youtube.js'))) {
   else ok('YouTube-blokkering er alltid på (statisk content-script)');
 }
 
-// Kosmetikk må kjøre generisk i alle frames (fanger annonser i kryssorigin-spillere).
+// Kryssorigin-frames skal få KUN en liten annonse-CSS, ikke hele 14k-lista (ytelse).
+// Full liste (generic-hide.css) skal kun lastes når scoped (topp/same-origin).
 const cosmeticSrc = fs.readFileSync(p('content', 'cosmetic.js'), 'utf8');
-if (/if \(!inScope\(\)\) return;/.test(cosmeticSrc)) {
-  fail('cosmetic.js stopper i kryssorigin-frames (piratspiller-annonser skjules ikke)');
-} else ok('cosmetic.js kjører generisk skjuling i alle frames');
+const frameIdx = cosmeticSrc.indexOf('best-adblock-frame-ads');
+const fullIdx = cosmeticSrc.indexOf("fetchText('rules/generic-hide.css')");
+if (frameIdx === -1) {
+  fail('cosmetic.js mangler lett kryssorigin-annonse-CSS');
+} else if (fullIdx !== -1 && fullIdx < frameIdx) {
+  fail('cosmetic.js laster full generisk liste før kryssorigin-guarden (ytelsesregresjon)');
+} else ok('cosmetic.js holder full liste til topp/same-origin, lett CSS i kryssorigin');
 
 // Cookie-bannere skal AVVISES automatisk, ikke bare skjules.
 if (fs.existsSync(p('content', 'cookies.js'))) {

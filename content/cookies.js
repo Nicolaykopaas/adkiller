@@ -96,6 +96,13 @@
 
   function start() {
     tryReject();
+    // YTELSE: kjør den tunge observeren KUN i toppframe. I CMP-iframes holder noen
+    // få forsøk — å ha en subtree-observer i hver iframe bidro til treghet.
+    if (window.top !== window) {
+      setTimeout(tryReject, 800);
+      setTimeout(tryReject, 2500);
+      return;
+    }
     // Bannere injiseres ofte litt etter last — observer i en kort periode.
     let scheduled = false;
     const obs = new MutationObserver(() => {
