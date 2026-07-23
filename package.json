@@ -12,7 +12,8 @@
     "dev": "node scripts/watch.mjs",
     "verify": "node scripts/verify.mjs && node scripts/test-prune.mjs",
     "adtest": "node scripts/adtest.mjs",
-    "dnr-probe": "node scripts/dnr-probe.mjs"
+    "dnr-probe": "node scripts/dnr-probe.mjs",
+    "yt-test": "node scripts/yt-test.mjs"
   },
   "devDependencies": {
     "@adguard/dnr-rulesets": "^4.1.20260721220037",

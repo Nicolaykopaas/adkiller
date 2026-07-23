@@ -1,91 +1,24 @@
 /**
- * YouTube-annonseblokkering (eksperimentell, av som standard).
+ * YouTube-annonseblokkering (alltid på).
  *
- * YouTube-annonser sendes fra samme server som videoen. Ren JSON-pruning er ikke nok
- * lenger, og å røre videostrømmen knekker avspilling. Derfor to lag, slik de enkle
- * «AdBlock for YouTube»-utvidelsene gjør det:
+ * NØKKELEN til å unngå ventetid: hindre at annonser i det hele tatt planlegges.
+ * YouTube henter «player response» fra /youtubei/v1/player og planlegger annonser via
+ * feltene adPlacements/playerAds der. Fjerner vi dem FØR spilleren leser svaret, laster
+ * YouTube kun innholdsvideoen — ingen annonse, og dermed ingen ventetid.
  *
- *   LAG 1 — hopp forbi annonser i selve spilleren:
- *     Når spilleren har klassen `.ad-showing`, spol annonse-videoen til slutten og
- *     trykk «Hopp over». Rører ALDRI den ekte videoen, så avspilling kan ikke knekke.
+ * Å bare skippe annonsen i spilleren (spole til slutten) fjerner det synlige, men
+ * YouTube bruker fortsatt annonsetiden før den slipper frem videoen — derav «videoen
+ * tar like lang tid som annonsen ville tatt». Derfor er pruning primær, skip er reserve.
  *
- *   LAG 2 — fjern annonseplanlegging fra player-JSON (best effort, forsiktig):
- *     Fjern kun annonsefelt, kun på objekter som faktisk er en player response.
- *     streamingData/videoDetails/playabilityStatus røres aldri.
+ *   LAG 1 (primær): fjern annonser fra player-response — via fetch-override
+ *     (/youtubei/v1/player) og fra ytInitialPlayerResponse (første sidelasting).
+ *   LAG 2 (reserve): hopp over/skjul annonser som likevel dukker opp i spilleren.
  *
- * Registreres dynamisk av service workeren KUN når brukeren har skrudd på funksjonen.
+ * Vår egen pakkede kode. Kjører i MAIN world ved document_start.
  */
 (() => {
   if (window.__bestAdblockYtLoaded) return;
   window.__bestAdblockYtLoaded = true;
-
-  // ---------- LAG 1: hopp over annonser i spilleren ----------
-
-  function skipVideoAd() {
-    const player = document.getElementById('movie_player');
-    const showingAd = player && player.classList.contains('ad-showing');
-
-    if (showingAd) {
-      const video = document.querySelector('.html5-main-video, video');
-      if (video && isFinite(video.duration) && video.duration > 0) {
-        video.muted = true;
-        // Spol til slutten av annonse-strømmen — YouTube går da videre til innholdet.
-        try {
-          video.currentTime = video.duration;
-        } catch { /* ignorer */ }
-      }
-    }
-
-    // Trykk «Hopp over»-knappen så snart den finnes (alle kjente varianter).
-    const skip = document.querySelector(
-      '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, ' +
-        '.ytp-ad-skip-button-container button',
-    );
-    if (skip) skip.click();
-
-    // Lukk overleggs-/banner-annonser.
-    const overlayClose = document.querySelector(
-      '.ytp-ad-overlay-close-button, .ytp-ad-overlay-close-container',
-    );
-    if (overlayClose) overlayClose.click();
-  }
-
-  // Kjør jevnlig. YTELSE: bruk IKKE en MutationObserver på hele YouTube-DOM-en —
-  // YouTube endrer klasser konstant, så en subtree-observer fyrer tusenvis av ganger
-  // og gjør siden treg. Et intervall er mer enn raskt nok til å fange annonser, og
-  // koster bare noen få querySelector-kall hvert sekund.
-  setInterval(skipVideoAd, 800);
-
-  // ---------- LAG 1b: skjul statiske annonseflater ----------
-
-  function injectCss() {
-    if (document.getElementById('best-adblock-yt-css')) return;
-    const style = document.createElement('style');
-    style.id = 'best-adblock-yt-css';
-    style.textContent = `
-      #masthead-ad,
-      ytd-ad-slot-renderer,
-      ytd-in-feed-ad-layout-renderer,
-      ytd-banner-promo-renderer,
-      ytd-statement-banner-renderer,
-      ytd-primetime-promo-renderer,
-      #player-ads,
-      #panels ytd-ads-engagement-panel-content-renderer,
-      .ytp-ad-overlay-slot,
-      .ytp-ad-overlay-container,
-      .ytd-companion-slot-renderer,
-      ytd-companion-slot-renderer {
-        display: none !important;
-      }
-    `;
-    (document.head || document.documentElement).appendChild(style);
-  }
-  injectCss();
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectCss, { once: true });
-  }
-
-  // ---------- LAG 2: fjern annonseplanlegging fra player-JSON ----------
 
   const AD_KEYS = ['adPlacements', 'playerAds', 'adSlots', 'adBreakHeartbeatParams'];
   const MAX_DEPTH = 8;
@@ -102,12 +35,10 @@
   function pruneAds(node, depth = 0) {
     if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return 0;
     let removed = 0;
-
     if (Array.isArray(node)) {
       for (const item of node) removed += pruneAds(item, depth + 1);
       return removed;
     }
-
     for (const key of AD_KEYS) {
       if (Object.prototype.hasOwnProperty.call(node, key)) {
         try {
@@ -123,24 +54,35 @@
     return removed;
   }
 
-  function tryPrune(data) {
-    try {
-      if (isPlayerResponse(data)) pruneAds(data);
-    } catch { /* aldri ødelegg sidens egen parsing */ }
-    return data;
-  }
-
-  // YTELSE: vi overstyrer IKKE global JSON.parse — YouTube parser JSON tusenvis av
-  // ganger, og en wrapper på hver eneste parse belaster hele siden. player-response
-  // hentes via fetch (Response.json) og settes inline (ytInitialPlayerResponse); begge
-  // dekkes under. Den synlige annonseblokkeringen gjøres uansett av ad-skipperen over.
+  // ---------- LAG 1a: fetch-override for player-response ----------
+  // Mest pålitelige punkt: SPA-navigasjon henter player via fetch(/youtubei/v1/player).
   try {
-    const nativeJson = Response.prototype.json;
-    Response.prototype.json = function () {
-      return nativeJson.call(this).then(tryPrune);
+    const origFetch = window.fetch;
+    window.fetch = async function (...args) {
+      const res = await origFetch.apply(this, args);
+      try {
+        const req = args[0];
+        const url = typeof req === 'string' ? req : req && req.url;
+        if (url && /\/youtubei\/v1\/(player|next|reel_watch_sequence)/.test(url)) {
+          const data = await res.clone().json();
+          if (isPlayerResponse(data) || data?.playerResponse) {
+            pruneAds(data);
+            const headers = new Headers(res.headers);
+            headers.delete('content-encoding');
+            headers.delete('content-length');
+            return new Response(JSON.stringify(data), {
+              status: res.status,
+              statusText: res.statusText,
+              headers,
+            });
+          }
+        }
+      } catch { /* ved feil: returner uendret svar */ }
+      return res;
     };
   } catch { /* ignorer */ }
 
+  // ---------- LAG 1b: ytInitialPlayerResponse (første sidelasting, inline i HTML) ----------
   try {
     let stored;
     Object.defineProperty(window, 'ytInitialPlayerResponse', {
@@ -150,8 +92,63 @@
         return stored;
       },
       set(value) {
-        stored = tryPrune(value);
+        try {
+          if (isPlayerResponse(value)) pruneAds(value);
+        } catch { /* ignorer */ }
+        stored = value;
       },
     });
   } catch { /* ignorer */ }
+
+  // ---------- LAG 2: reserve — hopp over/skjul annonser i spilleren ----------
+  function skipVideoAd() {
+    const player = document.getElementById('movie_player');
+    if (player && player.classList.contains('ad-showing')) {
+      const video = document.querySelector('.html5-main-video, video');
+      if (video && isFinite(video.duration) && video.duration > 0) {
+        video.muted = true;
+        // Spill annonsen i full fart og spol til slutten — henter frem innholdet raskt.
+        try {
+          video.playbackRate = 16;
+          video.currentTime = video.duration;
+        } catch { /* ignorer */ }
+      }
+    }
+    const skip = document.querySelector(
+      '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, ' +
+        '.ytp-ad-skip-button-container button',
+    );
+    if (skip) skip.click();
+    const overlayClose = document.querySelector(
+      '.ytp-ad-overlay-close-button, .ytp-ad-overlay-close-container',
+    );
+    if (overlayClose) overlayClose.click();
+  }
+  setInterval(skipVideoAd, 800);
+
+  // ---------- LAG 2b: skjul statiske annonseflater ----------
+  function injectCss() {
+    if (document.getElementById('best-adblock-yt-css')) return;
+    const style = document.createElement('style');
+    style.id = 'best-adblock-yt-css';
+    style.textContent = `
+      #masthead-ad,
+      ytd-ad-slot-renderer,
+      ytd-in-feed-ad-layout-renderer,
+      ytd-banner-promo-renderer,
+      ytd-statement-banner-renderer,
+      ytd-primetime-promo-renderer,
+      #player-ads,
+      .ytp-ad-overlay-slot,
+      .ytp-ad-overlay-container,
+      ytd-companion-slot-renderer {
+        display: none !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  injectCss();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectCss, { once: true });
+  }
 })();

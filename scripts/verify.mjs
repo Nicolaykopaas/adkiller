@@ -232,7 +232,7 @@ if (/writable:\s*false/.test(popupBlockerSrc)) {
 // måler en UBESKYTTET nettleser og gir falske "ads slipper gjennom"-resultater.
 // Harnessene MÅ laste via CDP Extensions.loadUnpacked.
 section('Test-harness');
-for (const file of ['scripts/adtest.mjs', 'scripts/dnr-probe.mjs']) {
+for (const file of ['scripts/adtest.mjs', 'scripts/dnr-probe.mjs', 'scripts/yt-test.mjs']) {
   if (!fs.existsSync(p(file))) continue;
   const src = fs.readFileSync(p(file), 'utf8');
   if (/['"`]--load-extension/.test(src)) {
