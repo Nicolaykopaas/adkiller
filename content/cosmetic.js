@@ -21,7 +21,10 @@
       return false;
     }
   }
-  if (!inScope()) return;
+  // scoped = toppframe eller same-origin subframe (der de tunge, domene-spesifikke
+  // reglene er relevante). Generiske regler kjører i ALLE frames — også kryssorigin —
+  // for å fange annonser inne i innebygde spillere (f.eks. piratsiders video-iframe).
+  const scoped = inScope();
 
   const config = await chrome.runtime.sendMessage({ type: 'getContentConfig' }).catch(() => null);
   if (!config || !config.active) return;
@@ -80,6 +83,13 @@
     genericApplied = !!generic;
   } catch (err) {
     console.debug('[best-adblock] generic-hide feilet', err);
+  }
+
+  // 2) + 3) kjører kun i toppframe/same-origin — domene-spesifikke regler og egne
+  // regler er knyttet til toppsidens domene og gir ikke mening i kryssorigin-iframes.
+  if (!scoped) {
+    // Kryssorigin subframe: kun generisk skjuling, ferdig.
+    return;
   }
 
   // 2) Domene-spesifikke regler (indeksert)

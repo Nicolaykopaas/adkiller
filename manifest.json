@@ -67,6 +67,12 @@
       "all_frames": false
     },
     {
+      "matches": ["<all_urls>"],
+      "js": ["content/cookies.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
       "matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
       "js": ["content/youtube.js"],
       "run_at": "document_start",

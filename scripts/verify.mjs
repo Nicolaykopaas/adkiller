@@ -221,6 +221,20 @@ if (fs.existsSync(p('content', 'youtube.js'))) {
   else ok('YouTube-blokkering er alltid på (statisk content-script)');
 }
 
+// Kosmetikk må kjøre generisk i alle frames (fanger annonser i kryssorigin-spillere).
+const cosmeticSrc = fs.readFileSync(p('content', 'cosmetic.js'), 'utf8');
+if (/if \(!inScope\(\)\) return;/.test(cosmeticSrc)) {
+  fail('cosmetic.js stopper i kryssorigin-frames (piratspiller-annonser skjules ikke)');
+} else ok('cosmetic.js kjører generisk skjuling i alle frames');
+
+// Cookie-bannere skal AVVISES automatisk, ikke bare skjules.
+if (fs.existsSync(p('content', 'cookies.js'))) {
+  const cSrc = fs.readFileSync(p('content', 'cookies.js'), 'utf8');
+  if (!/onetrust-reject-all|didomi-notice-disagree/.test(cSrc)) {
+    fail('cookies.js mangler kjente CMP-avvis-knapper');
+  } else ok('cookies.js avviser cookie-bannere automatisk');
+} else fail('content/cookies.js mangler');
+
 const popupBlockerSrc = fs.readFileSync(p('content', 'popup-blocker.js'), 'utf8');
 // window.open må være en accessor (ikke writable:false) for å unngå TypeError
 if (/writable:\s*false/.test(popupBlockerSrc)) {
