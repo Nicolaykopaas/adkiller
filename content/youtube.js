@@ -100,6 +100,21 @@
     });
   } catch { /* ignorer */ }
 
+  // ---------- LAG 1c: JSON.parse (uBlock Origin sin json-prune-metode) ----------
+  // uBO fanger player-response på ALLE inngangspunkter ved å overstyre JSON.parse,
+  // ikke bare fetch. Dette dekker XHR-responseText, inline data og cachede svar.
+  // Billig fordi isPlayerResponse kortslutter raskt for alt annet YouTube parser.
+  try {
+    const nativeParse = JSON.parse;
+    JSON.parse = function (text, reviver) {
+      const data = nativeParse.call(this, text, reviver);
+      try {
+        if (isPlayerResponse(data)) pruneAds(data);
+      } catch { /* ignorer */ }
+      return data;
+    };
+  } catch { /* ignorer */ }
+
   // ---------- LAG 2: reserve — hopp over/skjul annonser i spilleren ----------
   function skipVideoAd() {
     const player = document.getElementById('movie_player');
