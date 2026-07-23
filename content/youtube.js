@@ -138,6 +138,13 @@
       '.ytp-ad-overlay-close-button, .ytp-ad-overlay-close-container',
     );
     if (overlayClose) overlayClose.click();
+    // Lukk «YouTube Premium»-promoen (mealbar) automatisk.
+    const mealbarDismiss = document.querySelector(
+      'ytd-mealbar-promo-renderer #dismiss-button button, ' +
+        'ytd-mealbar-promo-renderer tp-yt-paper-button#dismiss-button, ' +
+        'ytmusic-mealbar-promo-renderer .dismiss-button',
+    );
+    if (mealbarDismiss) mealbarDismiss.click();
   }
   setInterval(skipVideoAd, 800);
 
@@ -146,17 +153,32 @@
     if (document.getElementById('best-adblock-yt-css')) return;
     const style = document.createElement('style');
     style.id = 'best-adblock-yt-css';
+    // uBlock Origins fulle YouTube-annonseliste (display-, companion-, promo-, mealbar-).
     style.textContent = `
       #masthead-ad,
       ytd-ad-slot-renderer,
-      ytd-in-feed-ad-layout-renderer,
-      ytd-banner-promo-renderer,
-      ytd-statement-banner-renderer,
+      ytd-action-companion-ad-renderer,
+      ytd-display-ad-renderer,
+      ytd-video-masthead-ad-v3-renderer,
+      ytd-video-masthead-ad-advertiser-info-renderer,
       ytd-primetime-promo-renderer,
+      ytd-banner-promo-renderer,
+      ytd-banner-promo-renderer-background,
+      ytd-statement-banner-renderer,
+      ytd-in-feed-ad-layout-renderer,
+      ytd-companion-slot-renderer,
+      ytd-promoted-sparmus-renderer,
+      ytd-promoted-video-renderer,
+      ytd-mealbar-promo-renderer,
+      ytd-popup-container:has(ytd-mealbar-promo-renderer),
+      tp-yt-paper-dialog:has(ytd-mealbar-promo-renderer),
+      ytd-rich-item-renderer:has(> #content > ytd-ad-slot-renderer),
+      ytd-rich-section-renderer:has(ytd-statement-banner-renderer),
       #player-ads,
       .ytp-ad-overlay-slot,
       .ytp-ad-overlay-container,
-      ytd-companion-slot-renderer {
+      .ytp-ad-progress-list,
+      ytm-companion-ad-renderer {
         display: none !important;
       }
     `;

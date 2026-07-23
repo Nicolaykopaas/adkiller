@@ -86,6 +86,29 @@ async function run() {
     } catch { /* siden navigerer */ }
   }
 
+  // Dump synlige annonse-/promo-elementer for presis targeting.
+  try {
+    const insp = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 3 && r.height > 3; };
+        const out = [];
+        for (const el of document.querySelectorAll('*')) {
+          const tag = el.tagName.toLowerCase();
+          const id = (el.id || '');
+          const cls = (typeof el.className === 'string' ? el.className : '');
+          const hay = (tag + ' ' + id + ' ' + cls).toLowerCase();
+          if (/(^|[^a-z])ad(-|_|s|$)|sponsor|promo|mealbar|premium/.test(hay) && vis(el)) {
+            out.push(tag + (id ? '#' + id : '') + (cls ? '.' + cls.split(' ').slice(0,3).join('.') : ''));
+          }
+        }
+        return JSON.stringify([...new Set(out)].slice(0, 30));
+      })()`,
+      returnByValue: true,
+    }, sessionId);
+    console.log('\nSynlige annonse/promo-elementer:');
+    for (const s of JSON.parse(insp.result.value)) console.log('  ' + s);
+  } catch (e) { console.log('inspeksjon feilet:', e.message); }
+
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' }, sessionId);
   const file = path.join(OUT, `youtube-${VIDEO}.png`);
   fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
